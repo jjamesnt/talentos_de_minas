@@ -1,14 +1,14 @@
 import React from 'react';
 import { Ticket, Heart, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
 import { useCampanha } from '../../hooks/useCampanha';
-import { PRECO_POR_COTA, TOTAL_COTAS } from '../../constants/campanha';
+import { TOTAL_COTAS } from '../../constants/campanha';
 
 interface SeletorRifaProps {
   onAbrirApoio: () => void;
 }
 
 export const SeletorRifa: React.FC<SeletorRifaProps> = ({ onAbrirApoio }) => {
-  const { totalCotasVendidas, bailarinos } = useCampanha();
+  const { totalCotasVendidas, bailarinos, precoPorCota } = useCampanha();
   const cotasRestantes = TOTAL_COTAS - totalCotasVendidas;
 
   return (
@@ -34,14 +34,14 @@ export const SeletorRifa: React.FC<SeletorRifaProps> = ({ onAbrirApoio }) => {
 
           {/* Descrição */}
           <p className="mt-3 sm:mt-4 text-slate-300 text-xs sm:text-sm md:text-base max-w-xl leading-relaxed">
-            Cada cota de <strong className="text-white font-bold">R$ {PRECO_POR_COTA},00</strong> apoia diretamente a viagem e os figurinos do bailarino de sua escolha. Ao avançar, você escolhe seu artista e sorteia seus números na nossa <strong className="text-[#00FF88]">Roleta Mágica</strong>!
+            Cada cota de <strong className="text-white font-bold">R$ {precoPorCota},00</strong> apoia diretamente a viagem e os figurinos do bailarino de sua escolha. Ao avançar, você escolhe seu artista e sorteia seus números na nossa <strong className="text-[#00FF88]">Roleta Mágica</strong>!
           </p>
 
           {/* Destaques Rápidos */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 my-6 sm:my-8 w-full max-w-lg">
             <div className="p-3 rounded-2xl bg-white/5 border border-white/5 flex flex-col items-center">
               <span className="text-[10px] sm:text-xs uppercase tracking-wider text-slate-400">Preço por cota</span>
-              <span className="font-mono text-base sm:text-lg font-bold text-[#D4AF37] mt-0.5">R$ {PRECO_POR_COTA},00</span>
+              <span className="font-mono text-base sm:text-lg font-bold text-[#D4AF37] mt-0.5">R$ {precoPorCota},00</span>
             </div>
             <div className="p-3 rounded-2xl bg-white/5 border border-white/5 flex flex-col items-center">
               <span className="text-[10px] sm:text-xs uppercase tracking-wider text-slate-400">Disponíveis</span>

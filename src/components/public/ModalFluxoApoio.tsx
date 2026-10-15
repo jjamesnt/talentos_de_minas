@@ -16,7 +16,6 @@ import {
 import { z } from 'zod';
 import { useCampanha } from '../../hooks/useCampanha';
 import { useToast } from '../../hooks/useToast';
-import { PRECO_POR_COTA } from '../../constants/campanha';
 import { RoletaWicked } from '../sorteio/RoletaWicked';
 import { BilhetesFixaveis } from '../sorteio/BilhetesFixaveis';
 import type { PedidoCheckout } from '../../types';
@@ -50,6 +49,7 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
     setBailarinoSelecionadoId, 
     selecionarCotasEmLote,
     concluirPedido,
+    precoPorCota,
   } = useCampanha();
   const { showToast } = useToast();
 
@@ -104,7 +104,7 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
         ativo: true,
       }
     : bailarinos.find((b) => b.id === bailarinoIdEscolhido);
-  const valorTotal = quantidadeCotas * PRECO_POR_COTA;
+  const valorTotal = quantidadeCotas * precoPorCota;
 
   // Lista de cotas disponíveis
   const disponiveis = cotas.filter((c) => c.status === 'disponivel').map((c) => c.numero);

@@ -50,14 +50,17 @@ export const Footer: React.FC<{ onAbrirAdmin: () => void }> = ({ onAbrirAdmin })
           <span className="flex items-center gap-1 text-slate-400">
             Feito com <Heart className="w-3.5 h-3.5 text-[#FF007F] fill-current" /> para a arte
           </span>
-          <button
-            onClick={onAbrirAdmin}
+          <a
+            href="/admin"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => onAbrirAdmin?.()}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-[#00FF88] border border-white/10 transition-colors cursor-pointer"
-            title="Acesso Administrativo Restrito"
+            title="Acesso Administrativo Restrito (Abrir em nova aba)"
           >
             <Lock className="w-3.5 h-3.5" />
             <span>Admin</span>
-          </button>
+          </a>
         </div>
       </div>
     </footer>

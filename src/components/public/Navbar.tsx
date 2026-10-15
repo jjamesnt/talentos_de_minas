@@ -62,14 +62,17 @@ export const Navbar: React.FC<{
             <span>Apoiar</span>
           </button>
 
-          <button
-            onClick={onAbrirAdmin}
+          <a
+            href="/admin"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => onAbrirAdmin?.()}
             className="p-2 sm:p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-[#00FF88] border border-white/10 transition-colors cursor-pointer min-w-[40px] min-h-[40px] flex items-center justify-center"
-            title="Acesso Administrativo"
+            title="Acesso Administrativo (Abrir em nova aba)"
             aria-label="Acesso Administrativo"
           >
             <Lock className="w-4 h-4" />
-          </button>
+          </a>
 
           {/* Botão Menu Hambúrguer para Mobile */}
           <button

@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { useCampanha } from '../../hooks/useCampanha';
 import { useToast } from '../../hooks/useToast';
-import { Download, Search, CheckCircle, RefreshCw, Eye, MessageCircle, Mail } from 'lucide-react';
+import { Download, Search, CheckCircle, RefreshCw, Eye, MessageCircle, Mail, Coins } from 'lucide-react';
 import { TOTAL_COTAS } from '../../constants/campanha';
 import type { CotaRifa } from '../../types';
 
 export const AdminRifa: React.FC = () => {
-  const { cotas, bailarinos, baixaManualCota, liberarCota } = useCampanha();
+  const { cotas, bailarinos, baixaManualCota, liberarCota, precoPorCota } = useCampanha();
   const { showToast } = useToast();
 
   const [filtroStatus, setFiltroStatus] = useState<'todos' | 'pago' | 'disponivel'>('todos');
@@ -115,6 +115,14 @@ export const AdminRifa: React.FC = () => {
           >
             Disponíveis ({cotas.filter((c) => c.status === 'disponivel').length})
           </button>
+
+          <div className="h-5 w-px bg-white/10 hidden sm:block" />
+
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/40 border border-[#D4AF37]/30 text-xs">
+            <Coins className="w-3.5 h-3.5 text-[#D4AF37]" />
+            <span className="text-slate-400">Preço:</span>
+            <strong className="text-[#D4AF37] font-mono">R$ {precoPorCota},00</strong>
+          </div>
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">

@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { Modal } from '../common/Modal';
 import { useCampanha } from '../../hooks/useCampanha';
 import { useToast } from '../../hooks/useToast';
-import { PRECO_POR_COTA } from '../../constants/campanha';
 import { QrCode, Copy, CheckCircle, Heart, ArrowRight, MessageCircle } from 'lucide-react';
 import type { PedidoCheckout } from '../../types';
 
@@ -18,7 +17,7 @@ export const CheckoutModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
   isOpen,
   onClose,
 }) => {
-  const { cotasSelecionadas, bailarinos, bailarinoSelecionadoId, concluirPedido } = useCampanha();
+  const { cotasSelecionadas, bailarinos, bailarinoSelecionadoId, concluirPedido, precoPorCota } = useCampanha();
   const { showToast } = useToast();
 
   const [nome, setNome] = useState('');
@@ -31,7 +30,7 @@ export const CheckoutModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
 
   const bailarinoId = bailarinoIdManual ?? bailarinoSelecionadoId ?? bailarinos[0]?.id ?? '';
 
-  const valorTotal = cotasSelecionadas.length * PRECO_POR_COTA;
+  const valorTotal = cotasSelecionadas.length * precoPorCota;
 
   const handleFinalizar = (e: React.FormEvent) => {
     e.preventDefault();

@@ -21,6 +21,8 @@ interface CampanhaContextData {
   editarBailarino: (id: string, dados: Partial<Bailarino>) => Promise<void>;
   baixaManualCota: (numero: number, dados: { compradorNome: string; compradorEmail?: string; compradorWhatsapp?: string; bailarinoId: string }) => Promise<void>;
   liberarCota: (numero: number) => Promise<void>;
+  precoPorCota: number;
+  atualizarPrecoPorCota: (novoPreco: number) => Promise<void>;
   carregarDadosReais: () => Promise<void>;
 }
 
@@ -43,6 +45,7 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [bailarinos, setBailarinos] = useState<Bailarino[]>([]);
   const [cotasSelecionadas, setCotasSelecionadas] = useState<number[]>([]);
   const [bailarinoSelecionadoId, setBailarinoSelecionadoId] = useState<string | null>(null);
+  const [precoPorCota, setPrecoPorCota] = useState<number>(PRECO_POR_COTA);
 
   // Limpeza de resíduos mockados antigos do LocalStorage
   useEffect(() => {
@@ -74,7 +77,19 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setBailarinos(mapeados);
       }
 
-      // 2. Carrega pedidos existentes para marcar cotas pagas/reservadas
+      // 2. Carrega configurações globais da campanha (Preço da Cota, etc.)
+      const { data: configData } = await supabase
+        .from('campanha_config')
+        .select('*');
+
+      if (configData) {
+        const precoRow = configData.find((c: any) => c.chave === 'preco_por_cota');
+        if (precoRow && !isNaN(Number(precoRow.valor)) && Number(precoRow.valor) > 0) {
+          setPrecoPorCota(Number(precoRow.valor));
+        }
+      }
+
+      // 3. Carrega pedidos existentes para marcar cotas pagas/reservadas
       const { data: oData, error: oError } = await supabase
         .from('raffle_orders')
         .select('*');
@@ -126,6 +141,11 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         { event: '*', schema: 'public', table: 'bailarinos' },
         () => carregarDadosReais()
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'campanha_config' },
+        () => carregarDadosReais()
+      )
       .subscribe();
 
     return () => {
@@ -134,7 +154,30 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [carregarDadosReais]);
 
   const totalCotasVendidas = cotas.filter((c) => c.status === 'pago').length;
-  const totalArrecadado = totalCotasVendidas * PRECO_POR_COTA;
+  const totalArrecadado = totalCotasVendidas * precoPorCota;
+
+  const atualizarPrecoPorCota = async (novoPreco: number) => {
+    if (novoPreco <= 0 || isNaN(novoPreco)) {
+      throw new Error('Informe um valor de cota válido e maior que zero.');
+    }
+
+    setPrecoPorCota(novoPreco);
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase
+        .from('campanha_config')
+        .upsert({
+          chave: 'preco_por_cota',
+          valor: String(novoPreco),
+          updated_at: new Date().toISOString(),
+        });
+
+      if (error) {
+        console.error('Erro ao atualizar preco_por_cota no banco:', error);
+        throw error;
+      }
+    }
+  };
 
   const toggleSelecionarCota = (numero: number) => {
     const cota = cotas.find((c) => c.numero === numero);
@@ -171,7 +214,7 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Conclusão real do pedido com inserção no Supabase
   const concluirPedido = (dados: { nome: string; email: string; whatsapp: string; bailarinoId: string }): PedidoCheckout => {
     const hoje = new Date().toISOString().split('T')[0];
-    const valorTotal = cotasSelecionadas.length * PRECO_POR_COTA;
+    const valorTotal = cotasSelecionadas.length * precoPorCota;
     const novoOrderId = crypto.randomUUID();
     const codigoPix = `00020126580014BR.GOV.BCB.PIX0136pix-talentos-${Date.now()}520400005303986540${valorTotal}.005802BR5925Talentos de Minas Ballet6009Belo Horizonte62070503***6304`;
 
@@ -299,6 +342,8 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         bailarinoSelecionadoId,
         totalArrecadado,
         totalCotasVendidas,
+        precoPorCota,
+        atualizarPrecoPorCota,
         toggleSelecionarCota,
         selecionarAleatorios,
         selecionarCotasEmLote,
