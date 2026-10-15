@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { Bailarino, CotaRifa, PedidoCheckout } from '../types';
-import { PRECO_POR_COTA, TOTAL_COTAS } from '../services/mockData';
+import { PRECO_POR_COTA, TOTAL_COTAS } from '../constants/campanha';
+import { AVATAR_PADRAO_BAILARINO } from '../utils/imageOptimizer';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface CampanhaContextData {
@@ -64,7 +65,7 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const mapeados: Bailarino[] = bData.map((b: any) => ({
           id: b.id,
           nome: b.nome,
-          fotoUrl: b.foto_url || '/bailarinos/b1.webp',
+          fotoUrl: b.foto_url || AVATAR_PADRAO_BAILARINO,
           meta: b.meta || 100,
           totalVendido: b.total_vendido || 0,
           totalApoios: b.total_apoios || 0,

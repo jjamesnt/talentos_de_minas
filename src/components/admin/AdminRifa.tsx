@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useCampanha } from '../../hooks/useCampanha';
 import { useToast } from '../../hooks/useToast';
 import { Download, Search, CheckCircle, RefreshCw, Eye, MessageCircle, Mail } from 'lucide-react';
-import { TOTAL_COTAS } from '../../services/mockData';
+import { TOTAL_COTAS } from '../../constants/campanha';
 import type { CotaRifa } from '../../types';
 
 export const AdminRifa: React.FC = () => {
@@ -353,6 +353,7 @@ export const AdminRifa: React.FC = () => {
                   onChange={(e) => setBailarinoId(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-black/40 border border-white/10 text-white focus:outline-none focus:border-[#00FF88]"
                 >
+                  <option value="">Campanha Geral (Sem bailarino específico)</option>
                   {bailarinos.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.nome}

@@ -224,7 +224,7 @@ export const AdminBailarinos: React.FC = () => {
                 <input
                   type="text"
                   required
-                  placeholder="Ex: Helena Duarte"
+                  placeholder="Nome completo do bailarino"
                   value={nome}
                   onChange={(e) => setNome(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl text-sm bg-black/40 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-[#00FF88]"
@@ -294,41 +294,49 @@ export const AdminBailarinos: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {bailarinos.map((b) => (
-                <tr key={b.id} className="hover:bg-white/5 transition-colors">
-                  <td className="px-4 sm:px-6 py-3.5 flex items-center gap-3">
-                    <img src={b.fotoUrl} alt={b.nome} className="w-10 h-10 rounded-xl object-cover border border-white/10 shadow-sm" />
-                    <div>
-                      <span className="font-medium text-white block">{b.nome}</span>
-                      <span className="text-[10px] text-slate-400 sm:hidden">{b.meta} cotas</span>
-                    </div>
-                  </td>
-                  <td className="px-4 sm:px-6 py-3.5 hidden sm:table-cell">{b.meta} cotas</td>
-                  <td className="px-4 sm:px-6 py-3.5 font-bold text-[#00FF88]">{b.totalVendido} cotas</td>
-                  <td className="px-4 sm:px-6 py-3.5">
-                    <button
-                      onClick={() => setBailarinoStatusToggle(b)}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold cursor-pointer ${
-                        b.ativo
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                      }`}
-                    >
-                      {b.ativo ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-                      {b.ativo ? 'Ativo' : 'Inativo'}
-                    </button>
-                  </td>
-                  <td className="px-4 sm:px-6 py-3.5 text-right">
-                    <button
-                      onClick={() => iniciarEdicao(b)}
-                      className="p-2 rounded-xl bg-white/5 hover:bg-[#00FF88]/20 text-slate-300 hover:text-[#00FF88] border border-white/10 transition-colors cursor-pointer"
-                      title="Editar dados e foto"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
+              {bailarinos.length > 0 ? (
+                bailarinos.map((b) => (
+                  <tr key={b.id} className="hover:bg-white/5 transition-colors">
+                    <td className="px-4 sm:px-6 py-3.5 flex items-center gap-3">
+                      <img src={b.fotoUrl} alt={b.nome} className="w-10 h-10 rounded-xl object-cover border border-white/10 shadow-sm" />
+                      <div>
+                        <span className="font-medium text-white block">{b.nome}</span>
+                        <span className="text-[10px] text-slate-400 sm:hidden">{b.meta} cotas</span>
+                      </div>
+                    </td>
+                    <td className="px-4 sm:px-6 py-3.5 hidden sm:table-cell">{b.meta} cotas</td>
+                    <td className="px-4 sm:px-6 py-3.5 font-bold text-[#00FF88]">{b.totalVendido} cotas</td>
+                    <td className="px-4 sm:px-6 py-3.5">
+                      <button
+                        onClick={() => setBailarinoStatusToggle(b)}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold cursor-pointer ${
+                          b.ativo
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                        }`}
+                      >
+                        {b.ativo ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                        {b.ativo ? 'Ativo' : 'Inativo'}
+                      </button>
+                    </td>
+                    <td className="px-4 sm:px-6 py-3.5 text-right">
+                      <button
+                        onClick={() => iniciarEdicao(b)}
+                        className="p-2 rounded-xl bg-white/5 hover:bg-[#00FF88]/20 text-slate-300 hover:text-[#00FF88] border border-white/10 transition-colors cursor-pointer"
+                        title="Editar dados e foto"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-4 sm:px-6 py-8 text-center text-slate-400 italic">
+                    Nenhum bailarino cadastrado ainda. Use o formulário acima para cadastrar os participantes oficiais.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>

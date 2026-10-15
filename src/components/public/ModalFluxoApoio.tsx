@@ -16,7 +16,7 @@ import {
 import { z } from 'zod';
 import { useCampanha } from '../../hooks/useCampanha';
 import { useToast } from '../../hooks/useToast';
-import { PRECO_POR_COTA } from '../../services/mockData';
+import { PRECO_POR_COTA } from '../../constants/campanha';
 import { RoletaWicked } from '../sorteio/RoletaWicked';
 import { BilhetesFixaveis } from '../sorteio/BilhetesFixaveis';
 import type { PedidoCheckout } from '../../types';
@@ -93,7 +93,17 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
     }
   }, [isOpen, bailarinoPreSelecionadoId]);
 
-  const bailarinoAtivo = bailarinos.find((b) => b.id === bailarinoIdEscolhido);
+  const bailarinoAtivo = bailarinoIdEscolhido === 'campanha-geral'
+    ? {
+        id: 'campanha-geral',
+        nome: 'Campanha Geral (Talentos de Minas)',
+        fotoUrl: '/logo_talentos.webp',
+        meta: 1200,
+        totalVendido: 0,
+        totalApoios: 0,
+        ativo: true,
+      }
+    : bailarinos.find((b) => b.id === bailarinoIdEscolhido);
   const valorTotal = quantidadeCotas * PRECO_POR_COTA;
 
   // Lista de cotas disponíveis
@@ -297,6 +307,43 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
 
               {/* Lista Compacta de Bailarinos (Mobile First) */}
               <div className="space-y-2 max-h-[320px] sm:max-h-[360px] overflow-y-auto pr-1">
+                {/* Opção Global: Apoiar a Campanha Geral (Todos os Bailarinos) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBailarinoIdEscolhido('campanha-geral');
+                    setBailarinoSelecionadoId(null);
+                  }}
+                  className={`w-full p-2.5 sm:p-3 rounded-2xl border text-left transition-all flex items-center justify-between gap-3 cursor-pointer ${
+                    bailarinoIdEscolhido === 'campanha-geral'
+                      ? 'bg-[#00FF88]/15 border-[#00FF88] shadow-[0_0_15px_rgba(0,255,136,0.25)] ring-1 ring-[#00FF88]'
+                      : 'bg-black/40 border-white/10 hover:border-white/20 hover:bg-white/5'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-[#D4AF37]/20 to-[#00FF88]/20 border border-white/10 flex items-center justify-center shrink-0">
+                      <Sparkles className="w-5 h-5 text-[#00FF88]" />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-bold text-white truncate">
+                        Apoiar Campanha Geral
+                      </h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Apoio compartilhado para todos os artistas do Wicked 2026
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border transition-all ${
+                    bailarinoIdEscolhido === 'campanha-geral'
+                      ? 'bg-[#00FF88] border-[#00FF88] text-black shadow-[0_0_8px_rgba(0,255,136,0.6)]'
+                      : 'border-white/20 bg-white/5'
+                  }`}>
+                    {bailarinoIdEscolhido === 'campanha-geral' && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                  </div>
+                </button>
+
+                {/* Bailarinos cadastrados no Supabase */}
                 {bailarinos
                   .filter((b) => b.ativo)
                   .map((bailarino) => {

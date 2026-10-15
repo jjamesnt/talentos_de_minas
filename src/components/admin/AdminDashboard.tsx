@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useCampanha } from '../../hooks/useCampanha';
 import { AdminBailarinos } from './AdminBailarinos';
 import { AdminRifa } from './AdminRifa';
-import { TOTAL_COTAS, PRECO_POR_COTA } from '../../services/mockData';
+import { TOTAL_COTAS, PRECO_POR_COTA } from '../../constants/campanha';
 import { LayoutDashboard, Users, Ticket, ArrowLeft, DollarSign, TrendingUp } from 'lucide-react';
 
 import logoTalentos from '../../assets/logo_talentos.webp';
@@ -140,33 +140,39 @@ export const AdminDashboard: React.FC<{ onVoltarAoSite: () => void }> = ({ onVol
                 Desempenho Comparativo de Vendas
               </h3>
 
-              <div className="space-y-4">
-                {bailarinos
-                  .filter((b) => b.ativo)
-                  .sort((a, b) => b.totalVendido - a.totalVendido)
-                  .map((b) => {
-                    const porcentagem = Math.min(100, Math.round((b.totalVendido / b.meta) * 100));
-                    return (
-                      <div key={b.id} className="space-y-1.5">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="font-medium text-white flex items-center gap-2">
-                            <img src={b.fotoUrl} alt={b.nome} className="w-5 h-5 rounded-full object-cover" />
-                            {b.nome}
-                          </span>
-                          <span className="text-slate-300">
-                            <strong>{b.totalVendido}</strong> / {b.meta} ({porcentagem}%)
-                          </span>
+              {bailarinos.filter((b) => b.ativo).length > 0 ? (
+                <div className="space-y-4">
+                  {bailarinos
+                    .filter((b) => b.ativo)
+                    .sort((a, b) => b.totalVendido - a.totalVendido)
+                    .map((b) => {
+                      const porcentagem = Math.min(100, Math.round((b.totalVendido / b.meta) * 100));
+                      return (
+                        <div key={b.id} className="space-y-1.5">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-medium text-white flex items-center gap-2">
+                              <img src={b.fotoUrl} alt={b.nome} className="w-5 h-5 rounded-full object-cover" />
+                              {b.nome}
+                            </span>
+                            <span className="text-slate-300">
+                              <strong>{b.totalVendido}</strong> / {b.meta} ({porcentagem}%)
+                            </span>
+                          </div>
+                          <div className="w-full h-2 bg-black/40 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-[#00FF88] to-[#FF007F] rounded-full transition-all duration-700"
+                              style={{ width: `${porcentagem}%` }}
+                            />
+                          </div>
                         </div>
-                        <div className="w-full h-2 bg-black/40 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-[#00FF88] to-[#FF007F] rounded-full transition-all duration-700"
-                            style={{ width: `${porcentagem}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
+                      );
+                    })}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 italic text-center py-6">
+                  Nenhum bailarino cadastrado ainda. Use a aba "Bailarinos" para cadastrar os participantes da campanha.
+                </p>
+              )}
             </div>
           </div>
         )}

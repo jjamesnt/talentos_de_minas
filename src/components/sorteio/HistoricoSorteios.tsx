@@ -21,7 +21,7 @@ export const HistoricoSorteios: React.FC<HistoricoSorteiosProps> = ({
         {/* Caixa Preta com Borda Verde Neon Glow */}
         <div className="w-full max-w-[240px] py-3.5 px-6 rounded-2xl bg-black/90 border-2 border-[#00FF88] shadow-[0_0_25px_rgba(0,255,136,0.45)] flex items-center justify-center">
           <span className="font-mono text-4xl sm:text-5xl font-black text-white tracking-widest drop-shadow-[0_2px_12px_rgba(0,255,136,0.9)]">
-            {ultimoNumeroSorteado !== null ? ultimoNumeroSorteado.toString().padStart(3, '0') : '856'}
+            {ultimoNumeroSorteado !== null ? ultimoNumeroSorteado.toString().padStart(3, '0') : '---'}
           </span>
         </div>
       </div>

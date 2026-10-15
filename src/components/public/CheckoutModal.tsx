@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Modal } from '../common/Modal';
 import { useCampanha } from '../../hooks/useCampanha';
 import { useToast } from '../../hooks/useToast';
-import { PRECO_POR_COTA } from '../../services/mockData';
+import { PRECO_POR_COTA } from '../../constants/campanha';
 import { QrCode, Copy, CheckCircle, Heart, ArrowRight, MessageCircle } from 'lucide-react';
 import type { PedidoCheckout } from '../../types';
 

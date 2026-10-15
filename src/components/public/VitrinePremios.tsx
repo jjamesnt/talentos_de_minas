@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tv, Sparkles, Gift, Flame, Ticket, Info } from 'lucide-react';
-import { PREMIOS_OFICIAIS } from '../../services/mockData';
+import { PREMIOS_OFICIAIS } from '../../constants/campanha';
 
 const iconesPremios: Record<number, React.ReactNode> = {
   1: <Tv className="w-6 h-6 text-[#00FF88]" />,

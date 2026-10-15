@@ -1,7 +1,7 @@
 import React from 'react';
-import { Ticket, Heart, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Ticket, Heart, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
 import { useCampanha } from '../../hooks/useCampanha';
-import { PRECO_POR_COTA, TOTAL_COTAS } from '../../services/mockData';
+import { PRECO_POR_COTA, TOTAL_COTAS } from '../../constants/campanha';
 
 interface SeletorRifaProps {
   onAbrirApoio: () => void;
@@ -68,19 +68,26 @@ export const SeletorRifa: React.FC<SeletorRifaProps> = ({ onAbrirApoio }) => {
           </button>
 
           {/* Mini Avatares dos Bailarinos */}
-          <div className="flex items-center gap-2 mt-6 text-slate-400 text-xs">
-            <div className="flex -space-x-2">
-              {bailarinos.slice(0, 5).map((b) => (
-                <img
-                  key={b.id}
-                  src={b.fotoUrl}
-                  alt={b.nome}
-                  className="w-7 h-7 rounded-full object-cover border-2 border-black"
-                />
-              ))}
+          {bailarinos.length > 0 ? (
+            <div className="flex items-center gap-2 mt-6 text-slate-400 text-xs">
+              <div className="flex -space-x-2">
+                {bailarinos.slice(0, 5).map((b) => (
+                  <img
+                    key={b.id}
+                    src={b.fotoUrl}
+                    alt={b.nome}
+                    className="w-7 h-7 rounded-full object-cover border-2 border-black"
+                  />
+                ))}
+              </div>
+              <span>Junte-se à torcida dos nossos bailarinos</span>
             </div>
-            <span>Junte-se à torcida dos nossos bailarinos</span>
-          </div>
+          ) : (
+            <div className="flex items-center justify-center gap-2 mt-6 text-slate-400 text-xs">
+              <Sparkles className="w-3.5 h-3.5 text-[#00FF88]" />
+              <span>Campanha Oficial • Jornada Wicked 2026</span>
+            </div>
+          )}
         </div>
       </div>
     </section>

@@ -42,100 +42,112 @@ export const RankingBailarinos: React.FC<RankingBailarinosProps> = ({ onApoiarBa
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          {bailarinosOrdenados.map((bailarino, index) => {
-            const isSelecionado = bailarinoSelecionadoId === bailarino.id;
-            const posicao = index + 1;
+        {bailarinosOrdenados.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            {bailarinosOrdenados.map((bailarino, index) => {
+              const isSelecionado = bailarinoSelecionadoId === bailarino.id;
+              const posicao = index + 1;
 
-            return (
-              <div
-                key={bailarino.id}
-                className={`group relative rounded-2xl p-4 sm:p-5 border transition-all duration-300 flex flex-col justify-between ${
-                  isSelecionado
-                    ? 'bg-[#0F3D2A]/40 border-[#00FF88] shadow-lg shadow-[#00FF88]/10 ring-1 ring-[#00FF88]'
-                    : 'glass-card border-white/10 hover:border-white/20 hover:bg-slate-900/60'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center gap-3.5 sm:gap-4">
-                    {/* Foto com moldura */}
-                    <div className="relative shrink-0">
-                      <img
-                        src={bailarino.fotoUrl}
-                        alt={bailarino.nome}
-                        className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border-2 border-white/10 group-hover:border-[#00FF88]/50 transition-colors"
-                      />
-                      <span
-                        className={`absolute -top-1.5 -left-1.5 sm:-top-2 sm:-left-2 w-5 h-5 sm:w-6 sm:h-6 rounded-full text-[10px] sm:text-xs font-bold flex items-center justify-center border ${
-                          posicao === 1
-                            ? 'bg-[#D4AF37] text-black border-amber-300'
-                            : posicao === 2
-                            ? 'bg-slate-300 text-black border-white'
-                            : posicao === 3
-                            ? 'bg-amber-700 text-white border-amber-600'
-                            : 'bg-slate-800 text-slate-300 border-slate-700'
-                        }`}
-                      >
-                        {posicao}º
-                      </span>
-                    </div>
-
-                    {/* Detalhes */}
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-white text-sm sm:text-base truncate group-hover:text-[#00FF88] transition-colors">
-                        {bailarino.nome}
-                      </h3>
-                      <p className="text-[11px] sm:text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                        <Award className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
-                        <span className="truncate">{bailarino.totalVendido} cotas vendidas</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Barra da meta individual */}
-                  <div className="mt-3.5 sm:mt-4 pt-3 sm:pt-4 border-t border-white/5">
-                    <div className="flex justify-between text-[11px] sm:text-xs text-slate-400 mb-1.5">
-                      <span>Meta individual</span>
-                      <span className="font-medium text-slate-200">
-                        {bailarino.totalVendido} / {bailarino.meta} cotas
-                      </span>
-                    </div>
-                    <div className="w-full h-2 bg-black/40 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-[#00FF88] to-[#FF007F] rounded-full transition-all duration-500"
-                        style={{
-                          width: `${Math.min(100, Math.round((bailarino.totalVendido / bailarino.meta) * 100))}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Botão de Apoio Touch-Friendly */}
-                <button
-                  onClick={() => selecionarBailarino(bailarino.id)}
-                  className={`mt-4 sm:mt-5 w-full py-3 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] ${
+              return (
+                <div
+                  key={bailarino.id}
+                  className={`group relative rounded-2xl p-4 sm:p-5 border transition-all duration-300 flex flex-col justify-between ${
                     isSelecionado
-                      ? 'bg-[#00FF88] text-black font-bold glow-oz'
-                      : 'bg-white/5 hover:bg-[#00FF88]/20 text-white hover:text-[#00FF88] border border-white/10 hover:border-[#00FF88]/40 active:scale-98'
+                      ? 'bg-[#0F3D2A]/40 border-[#00FF88] shadow-lg shadow-[#00FF88]/10 ring-1 ring-[#00FF88]'
+                      : 'glass-card border-white/10 hover:border-white/20 hover:bg-slate-900/60'
                   }`}
                 >
-                  {isSelecionado ? (
-                    <>
-                      <Check className="w-4 h-4 stroke-[3]" />
-                      Bailarino Selecionado
-                    </>
-                  ) : (
-                    <>
-                      <Heart className="w-4 h-4 text-[#FF007F]" />
-                      Apoiar {bailarino.nome.split(' ')[0]}
-                    </>
-                  )}
-                </button>
-              </div>
-            );
-          })}
-        </div>
+                  <div>
+                    <div className="flex items-center gap-3.5 sm:gap-4">
+                      {/* Foto com moldura */}
+                      <div className="relative shrink-0">
+                        <img
+                          src={bailarino.fotoUrl}
+                          alt={bailarino.nome}
+                          className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border-2 border-white/10 group-hover:border-[#00FF88]/50 transition-colors"
+                        />
+                        <span
+                          className={`absolute -top-1.5 -left-1.5 sm:-top-2 sm:-left-2 w-5 h-5 sm:w-6 sm:h-6 rounded-full text-[10px] sm:text-xs font-bold flex items-center justify-center border ${
+                            posicao === 1
+                              ? 'bg-[#D4AF37] text-black border-amber-300'
+                              : posicao === 2
+                              ? 'bg-slate-300 text-black border-white'
+                              : posicao === 3
+                              ? 'bg-amber-700 text-white border-amber-600'
+                              : 'bg-slate-800 text-slate-300 border-slate-700'
+                          }`}
+                        >
+                          {posicao}º
+                        </span>
+                      </div>
+
+                      {/* Detalhes */}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-white text-sm sm:text-base truncate group-hover:text-[#00FF88] transition-colors">
+                          {bailarino.nome}
+                        </h3>
+                        <p className="text-[11px] sm:text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                          <Award className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
+                          <span className="truncate">{bailarino.totalVendido} cotas vendidas</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Barra da meta individual */}
+                    <div className="mt-3.5 sm:mt-4 pt-3 sm:pt-4 border-t border-white/5">
+                      <div className="flex justify-between text-[11px] sm:text-xs text-slate-400 mb-1.5">
+                        <span>Meta individual</span>
+                        <span className="font-medium text-slate-200">
+                          {bailarino.totalVendido} / {bailarino.meta} cotas
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-black/40 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-[#00FF88] to-[#FF007F] rounded-full transition-all duration-500"
+                          style={{
+                            width: `${Math.min(100, Math.round((bailarino.totalVendido / bailarino.meta) * 100))}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Botão de Apoio Touch-Friendly */}
+                  <button
+                    onClick={() => selecionarBailarino(bailarino.id)}
+                    className={`mt-4 sm:mt-5 w-full py-3 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] ${
+                      isSelecionado
+                        ? 'bg-[#00FF88] text-black font-bold glow-oz'
+                        : 'bg-white/5 hover:bg-[#00FF88]/20 text-white hover:text-[#00FF88] border border-white/10 hover:border-[#00FF88]/40 active:scale-98'
+                    }`}
+                  >
+                    {isSelecionado ? (
+                      <>
+                        <Check className="w-4 h-4 stroke-[3]" />
+                        Bailarino Selecionado
+                      </>
+                    ) : (
+                      <>
+                        <Heart className="w-4 h-4 text-[#FF007F]" />
+                        Apoiar {bailarino.nome.split(' ')[0]}
+                      </>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-12 px-6 rounded-3xl glass-card border border-white/10 max-w-lg mx-auto">
+            <Users className="w-10 h-10 text-[#00FF88] mx-auto mb-3 opacity-60" />
+            <h3 className="font-cinzel text-lg font-bold text-white mb-1.5">
+              Cadastros em Andamento
+            </h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              A coordenação do Talentos de Minas está cadastrando a lista oficial de artistas da Jornada Wicked 2026. Em breve o ranking estará ativo!
+            </p>
+          </div>
+        )}
       </div>
     </section>
   );

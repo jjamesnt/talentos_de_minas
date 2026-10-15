@@ -5,7 +5,7 @@ import { RoletaWicked } from './RoletaWicked';
 import { BilhetesFixaveis } from './BilhetesFixaveis';
 import { HistoricoSorteios } from './HistoricoSorteios';
 import { useCampanha } from '../../hooks/useCampanha';
-import { PRECO_POR_COTA } from '../../services/mockData';
+import { PRECO_POR_COTA } from '../../constants/campanha';
 
 // 10 Números Oficiais visíveis nas fatias da roleta da imagem de referência
 const NUMEROS_ROLETA = [1192, 23, 856, 78, 312, 66, 815, 1044, 12, 407];
@@ -23,15 +23,8 @@ export const PainelSorteio: React.FC<PainelSorteioProps> = ({ onConcluirSelecao 
   const [numerosSorteados, setNumerosSorteados] = useState<number[]>([]);
   const [indicesFixados, setIndicesFixados] = useState<number[]>([]);
   const [hasSpunOnce, setHasSpunOnce] = useState(false);
-  const [ultimoNumero, setUltimoNumero] = useState<number | null>(856);
-
-  const [historico] = useState<Array<{ numero: number; nome: string }>>([
-    { numero: 856, nome: 'Marcelo R.' },
-    { numero: 245, nome: 'João S.' },
-    { numero: 712, nome: 'Maria A.' },
-    { numero: 725, nome: 'Paula L.' },
-    { numero: 66, nome: 'Camila P.' },
-  ]);
+  const [ultimoNumero, setUltimoNumero] = useState<number | null>(null);
+  const [historico] = useState<Array<{ numero: number; nome: string }>>([]);
 
   const rotationRef = useRef(18);
 
