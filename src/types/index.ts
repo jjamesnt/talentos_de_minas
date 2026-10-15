@@ -70,3 +70,17 @@ export interface PedidoCheckout {
   status: 'pago' | 'pendente';
   codigoPix: string;
 }
+
+export type CargoUsuario = 'Administrador' | 'Coordenação' | 'Operador' | 'Financeiro';
+
+export interface AdminUser {
+  id: string;
+  nome: string;
+  email: string;
+  cargo: CargoUsuario;
+  telefone?: string;
+  ativo: boolean;
+  ultimoAcesso?: string;
+  createdAt?: string;
+  senha?: string;
+}

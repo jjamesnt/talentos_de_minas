@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
 import { useCampanha } from '../../hooks/useCampanha';
+import { useAdminUsuarios } from '../../hooks/useAdminUsuarios';
 import { AdminBailarinos } from './AdminBailarinos';
 import { AdminRifa } from './AdminRifa';
+import { AdminUsuarios } from './AdminUsuarios';
+import { ErrorBoundary } from '../common/ErrorBoundary';
 import { TOTAL_COTAS, PRECO_POR_COTA } from '../../constants/campanha';
-import { LayoutDashboard, Users, Ticket, ArrowLeft, DollarSign, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, Users, Ticket, ArrowLeft, DollarSign, TrendingUp, UserCog } from 'lucide-react';
 
 import logoTalentos from '../../assets/logo_talentos.webp';
 
 export const AdminDashboard: React.FC<{ onVoltarAoSite: () => void }> = ({ onVoltarAoSite }) => {
-  const [abaAtiva, setAbaAtiva] = useState<'kpi' | 'bailarinos' | 'rifa'>('kpi');
+  const [abaAtiva, setAbaAtiva] = useState<'kpi' | 'bailarinos' | 'rifa' | 'usuarios'>('kpi');
   const { totalArrecadado, totalCotasVendidas, bailarinos } = useCampanha();
+  const { usuarios } = useAdminUsuarios();
 
   const cotasDisponiveis = TOTAL_COTAS - totalCotasVendidas;
   const metaTotal = TOTAL_COTAS * PRECO_POR_COTA;
@@ -81,6 +85,18 @@ export const AdminDashboard: React.FC<{ onVoltarAoSite: () => void }> = ({ onVol
           >
             <Ticket className="w-4 h-4 shrink-0" />
             Mapa da Rifa (1.200)
+          </button>
+
+          <button
+            onClick={() => setAbaAtiva('usuarios')}
+            className={`py-2.5 sm:py-3 px-3 sm:px-4 text-xs font-semibold flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              abaAtiva === 'usuarios'
+                ? 'border-[#00FF88] text-[#00FF88]'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <UserCog className="w-4 h-4 shrink-0" />
+            Controle de Usuários ({usuarios.length})
           </button>
         </div>
       </header>
@@ -177,8 +193,11 @@ export const AdminDashboard: React.FC<{ onVoltarAoSite: () => void }> = ({ onVol
           </div>
         )}
 
-        {abaAtiva === 'bailarinos' && <AdminBailarinos />}
-        {abaAtiva === 'rifa' && <AdminRifa />}
+        <ErrorBoundary fallbackTitle="Erro ao carregar módulo administrativo">
+          {abaAtiva === 'bailarinos' && <AdminBailarinos />}
+          {abaAtiva === 'rifa' && <AdminRifa />}
+          {abaAtiva === 'usuarios' && <AdminUsuarios />}
+        </ErrorBoundary>
       </main>
     </div>
   );
