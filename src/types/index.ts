@@ -39,7 +39,7 @@ export interface Bailarino {
   ativo: boolean;
 }
 
-export type StatusCota = 'disponivel' | 'selecionado' | 'pago' | 'pendente';
+export type StatusCota = 'disponivel' | 'selecionado' | 'pago' | 'pendente' | 'reservado';
 
 export interface CotaRifa {
   numero: number; // 1 a 1200
