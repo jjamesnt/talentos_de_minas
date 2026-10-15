@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-bg-dark: #0a0a0a;
+    --color-elphaba-green: #0f3d2a;
+    --color-oz-glow: #00ff88;
+    --color-glinda-pink: #ffd1dc;
+    --color-glinda-hot: #ff007f;
+    --color-gold: #d4af37;
+    --font-title: 'Cinzel', serif;
+    --font-body: 'Inter', sans-serif;
+  }
+
+  body {
+    background-color: var(--color-bg-dark);
+    color: #f8fafc;
+    font-family: var(--font-body);
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, .font-cinzel {
+    font-family: var(--font-title);
+  }
+}
+
+.text-gold {
+  color: #d4af37;
+}
+
+.border-gold {
+  border-color: #d4af37;
+}
+
+.bg-elphaba {
+  background-color: #0f3d2a;
+}
+
+.text-oz-glow {
+  color: #00ff88;
+}
+
+.bg-oz-glow {
+  background-color: #00ff88;
+}
+
+.glow-oz {
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.35);
+}
+
+.glow-gold {
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.35);
+}
+
+.glow-glinda {
+  box-shadow: 0 0 20px rgba(255, 0, 127, 0.35);
+}
+
+.glass-card {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-card-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card-hover:hover {
+  background: rgba(15, 23, 42, 0.85);
+  border-color: rgba(0, 255, 136, 0.3);
+  transform: translateY(-2px);
+}
