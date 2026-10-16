@@ -52,10 +52,54 @@ export interface CotaRifa {
 }
 
 export interface Premio {
+  id?: string;
   posicao: number;
   titulo: string;
   subtitulo: string;
+  fotoUrl?: string;
   destaque?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProdutoLoja {
+  id: string;
+  nome: string;
+  descricao?: string;
+  preco: number;
+  fotoUrl?: string;
+  estoque?: number;
+  tamanhosDisponiveis?: string[];
+  ativo: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PedidoLoja {
+  id: string;
+  produto_id?: string;
+  produto_nome: string;
+  quantidade: number;
+  tamanho?: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  total_price: number;
+  status: 'pending' | 'paid' | 'expired' | 'cancelled';
+  payment_method?: string;
+  payment_origin?: string;
+  mp_payment_id?: string;
+  codigo_pix?: string;
+  qr_code_base64?: string;
+  status_updated_by?: string;
+  status_updated_at?: string;
+  reason?: string;
+  retirado?: boolean;
+  retirado_em?: string;
+  email_sent?: boolean;
+  email_status?: string;
+  created_at: string;
+  updated_at?: string;
 }
 
 export interface PedidoCheckout {
@@ -86,3 +130,28 @@ export interface AdminUser {
   createdAt?: string;
   senha?: string;
 }
+
+export type CategoriaDespesa = 
+  | 'Produção Wicked'
+  | 'Figurinos & Adereços'
+  | 'Produtos/Loja'
+  | 'Marketing & Divulgação'
+  | 'Taxas Bancárias & Gateway'
+  | 'Transporte & Logística'
+  | 'Alimentação'
+  | 'Espaço & Locação'
+  | 'Outros';
+
+export interface DespesaFinanceira {
+  id: string;
+  titulo: string;
+  descricao?: string;
+  categoria: CategoriaDespesa | string;
+  valor: number;
+  data_despesa: string;
+  comprovante_url?: string;
+  criado_por: string;
+  created_at: string;
+  updated_at?: string;
+}
+

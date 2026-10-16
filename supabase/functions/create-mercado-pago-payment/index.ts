@@ -19,7 +19,7 @@ serve(async (req) => {
   }
 
   try {
-    const { order_id, total_price, customer_name, customer_email, description } = await req.json()
+    const { order_id, total_price, customer_name, customer_email, description, order_type } = await req.json()
 
     if (!order_id || !total_price) {
       return new Response(JSON.stringify({ error: 'order_id e total_price são obrigatórios' }), { 
@@ -74,7 +74,8 @@ serve(async (req) => {
     const qrCodeBase64 = transactionData?.qr_code_base64
 
     // Atualiza o pedido no banco de dados com os dados retornados pelo gateway
-    await supabase.from('raffle_orders').update({ 
+    const targetTable = order_type === 'loja' ? 'loja_orders' : 'raffle_orders'
+    await supabase.from(targetTable).update({ 
       mp_payment_id: String(data.id),
       codigo_pix: qrCode,
       qr_code_base64: qrCodeBase64,

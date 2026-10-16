@@ -5,7 +5,6 @@ import { RoletaWicked } from './RoletaWicked';
 import { BilhetesFixaveis } from './BilhetesFixaveis';
 import { HistoricoSorteios } from './HistoricoSorteios';
 import { useCampanha } from '../../hooks/useCampanha';
-import { PRECO_POR_COTA } from '../../constants/campanha';
 
 // 10 Números Oficiais visíveis nas fatias da roleta da imagem de referência
 const NUMEROS_ROLETA = [1192, 23, 856, 78, 312, 66, 815, 1044, 12, 407];
@@ -15,7 +14,7 @@ interface PainelSorteioProps {
 }
 
 export const PainelSorteio: React.FC<PainelSorteioProps> = ({ onConcluirSelecao }) => {
-  const { cotas } = useCampanha();
+  const { cotas, precoPorCota } = useCampanha();
   const controls = useAnimation();
 
   const [quantidade, setQuantidade] = useState(1);
@@ -147,7 +146,7 @@ export const PainelSorteio: React.FC<PainelSorteioProps> = ({ onConcluirSelecao 
         </div>
 
         <span className="w-full sm:w-auto text-right text-xs font-mono font-bold text-[#D4AF37]">
-          Total: R$ {(quantidade * PRECO_POR_COTA).toFixed(2).replace('.', ',')}
+          Total: R$ {(quantidade * precoPorCota).toFixed(2).replace('.', ',')}
         </span>
       </div>
 

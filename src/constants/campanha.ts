@@ -1,6 +1,6 @@
 import type { Premio } from '../types';
 
-export const PRECO_POR_COTA = 25; // R$ 25,00 por bilhete da rifa
+export const PRECO_POR_COTA = 30; // R$ 30,00 por cota da campanha
 export const TOTAL_COTAS = 1200;
 
 export const PREMIOS_OFICIAIS: Premio[] = [

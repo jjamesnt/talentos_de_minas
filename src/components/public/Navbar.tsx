@@ -44,9 +44,6 @@ export const Navbar: React.FC<{
           <button onClick={() => scrollPara('secao-premios')} className="hover:text-[#00FF88] transition-colors cursor-pointer py-2">
             Prêmios
           </button>
-          <button onClick={() => scrollPara('secao-rifa')} className="hover:text-[#00FF88] transition-colors cursor-pointer py-2">
-            Rifa 1.200 Cotas
-          </button>
           <button onClick={() => scrollPara('secao-loja')} className="hover:text-[#FF007F] transition-colors cursor-pointer py-2">
             Produtos Sazonais
           </button>
@@ -93,12 +90,6 @@ export const Navbar: React.FC<{
             className="text-left text-sm font-medium text-slate-200 hover:text-[#00FF88] py-2 border-b border-white/5"
           >
             Prêmios Oficiais
-          </button>
-          <button
-            onClick={() => scrollPara('secao-rifa')}
-            className="text-left text-sm font-medium text-slate-200 hover:text-[#00FF88] py-2 border-b border-white/5"
-          >
-            Ação entre Amigos (1.200 Números)
           </button>
           <button
             onClick={() => scrollPara('secao-loja')}

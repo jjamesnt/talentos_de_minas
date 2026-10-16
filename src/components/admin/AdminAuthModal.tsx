@@ -38,6 +38,11 @@ export const AdminAuthModal: React.FC<{
         (emailLimpo === 'admin@talentosdeminas.com.br' || emailLimpo === 'talentosdeminasballet@gmail.com') &&
         senhaLimpa === 'wicked2026'
       ) {
+        localStorage.setItem('admin_usuario_atual', JSON.stringify({
+          nome: 'Coordenação Geral',
+          email: emailLimpo,
+          cargo: 'Administrador'
+        }));
         onAutenticado();
         showToast({
           type: 'success',
@@ -80,6 +85,13 @@ export const AdminAuthModal: React.FC<{
               .update({ ultimo_acesso: new Date().toISOString() })
               .eq('id', usuario.id)
               .then(() => {});
+
+            localStorage.setItem('admin_usuario_atual', JSON.stringify({
+              id: usuario.id,
+              nome: usuario.nome,
+              email: usuario.email,
+              cargo: usuario.cargo
+            }));
 
             onAutenticado();
             showToast({
@@ -162,9 +174,6 @@ export const AdminAuthModal: React.FC<{
               {mostrarSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Senha padrão inicial da equipe: <code className="text-[#00FF88]">wicked2026</code>
-          </p>
         </div>
 
         <button

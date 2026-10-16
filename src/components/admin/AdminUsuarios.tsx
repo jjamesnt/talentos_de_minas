@@ -29,7 +29,7 @@ const CARGOS_DISPONIVEIS: { valor: CargoUsuario; label: string; desc: string; co
   { 
     valor: 'Administrador', 
     label: 'Administrador Geral', 
-    desc: 'Controle total da campanha, rifas, bailarinos e usuários',
+    desc: 'Controle total da campanha, pedidos, cotas, bailarinos e usuários',
     cor: 'border-[#D4AF37] text-[#D4AF37] bg-[#D4AF37]/10'
   },
   { 

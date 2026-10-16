@@ -144,8 +144,47 @@ serve(async (req) => {
       }
 
       console.log(`Pedido ${orderId} atualizado para 'paid' com sucesso via Webhook!`)
+
+      // 6. Disparo assíncrono do recibo por e-mail via Brevo
+      try {
+        fetch(`${SUPABASE_URL}/functions/v1/send-receipt-email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+          },
+          body: JSON.stringify({ order_id: orderId })
+        }).catch((e) => console.error('Falha ao acionar envio de recibo Brevo:', e));
+      } catch (errEmail) {
+        console.error('Exceção ao disparar e-mail no webhook:', errEmail);
+      }
     } else {
-      console.warn(`Pedido ${orderId} não encontrado na tabela raffle_orders`)
+      // Verifica se o pedido pertence à loja
+      const { data: lojaOrder } = await supabase
+        .from('loja_orders')
+        .select('*')
+        .eq('id', orderId)
+        .maybeSingle()
+
+      if (lojaOrder) {
+        if (lojaOrder.status !== 'paid') {
+          await supabase
+            .from('loja_orders')
+            .update({ 
+              status: 'paid', 
+              payment_origin: 'mercadopago', 
+              payment_method: 'pix',
+              mp_payment_id: String(paymentId), 
+              status_updated_by: 'webhook_mercadopago',
+              status_updated_at: new Date().toISOString(),
+              updated_at: new Date().toISOString() 
+            })
+            .eq('id', orderId)
+          console.log(`Pedido da Loja ${orderId} aprovado com sucesso via webhook!`)
+        }
+      } else {
+        console.warn(`Pedido ${orderId} não encontrado em raffle_orders nem loja_orders`)
+      }
     }
 
     return new Response(JSON.stringify({ success: true, order_id: orderId, status: 'paid' }), { 

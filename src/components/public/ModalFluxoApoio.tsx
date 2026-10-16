@@ -14,7 +14,10 @@ import {
   CheckCircle2,
   Loader2,
   ShieldCheck,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle,
+  Clock,
+  Mail
 } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '../../lib/supabase';
@@ -80,6 +83,8 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
   const [isGeneratingPix, setIsGeneratingPix] = useState(false);
   const [pedidoPago, setPedidoPago] = useState(false);
   const [verificandoManual, setVerificandoManual] = useState(false);
+  const [segundosRestantes, setSegundosRestantes] = useState(1200); // 20 minutos
+  const [pedidoExpirado, setPedidoExpirado] = useState(false);
 
   // Sincroniza abertura do modal e pré-seleção
   useEffect(() => {
@@ -98,10 +103,40 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
       setIndicesFixados([]);
       setPedidoConcluido(null);
       setPedidoPago(false);
+      setPedidoExpirado(false);
+      setSegundosRestantes(1200);
       setIsGeneratingPix(false);
       setErros({});
     }
   }, [isOpen, bailarinoPreSelecionadoId]);
+
+  // Timer de 20 minutos para expiração do Pix
+  useEffect(() => {
+    if (!pedidoConcluido?.id || pedidoPago || pedidoExpirado) return;
+
+    const interval = setInterval(() => {
+      setSegundosRestantes((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setPedidoExpirado(true);
+          supabase
+            .from('raffle_orders')
+            .update({
+              status: 'expired',
+              status_updated_by: 'cliente_timeout',
+              status_updated_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', pedidoConcluido.id);
+          carregarDadosReais();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [pedidoConcluido?.id, pedidoPago, pedidoExpirado, carregarDadosReais]);
 
   // Monitoramento em tempo real via WebSocket do Supabase Realtime
   useEffect(() => {
@@ -126,6 +161,15 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
               title: 'Pagamento Confirmado!',
               message: 'Seu Pix foi aprovado em tempo real pelo Mercado Pago. Suas cotas estão garantidas!',
               duration: 8000,
+            });
+          } else if (payload.new && (payload.new.status === 'expired' || payload.new.status === 'cancelled')) {
+            setPedidoExpirado(true);
+            carregarDadosReais();
+            showToast({
+              type: 'warning',
+              title: 'Tempo Esgotado',
+              message: 'O Pix não foi concluído dentro do prazo e as cotas voltaram a ficar disponíveis.',
+              duration: 7000,
             });
           }
         }
@@ -155,6 +199,14 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
           title: 'Pagamento Confirmado!',
           message: 'Seu Pix já consta como aprovado no sistema.',
         });
+      } else if (!error && (data?.status === 'expired' || data?.status === 'cancelled')) {
+        setPedidoExpirado(true);
+        carregarDadosReais();
+        showToast({
+          type: 'warning',
+          title: 'Tempo Esgotado',
+          message: 'Este pedido foi expirado e as cotas voltaram a ficar disponíveis.',
+        });
       } else {
         showToast({
           type: 'info',
@@ -166,6 +218,24 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
     } finally {
       setVerificandoManual(false);
     }
+  };
+
+  const formatarTempo = (segundos: number) => {
+    const mins = Math.floor(segundos / 60);
+    const secs = segundos % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
+  const handleReiniciarNovoPedido = () => {
+    setPedidoConcluido(null);
+    setPedidoPago(false);
+    setPedidoExpirado(false);
+    setSegundosRestantes(1200);
+    setEtapa('roleta');
+    setNumerosSorteados([]);
+    setIndicesFixados([]);
+    setHasSpunOnce(false);
+    carregarDadosReais();
   };
 
   const bailarinoAtivo = bailarinoIdEscolhido === 'campanha-geral'
@@ -837,32 +907,86 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
                     </p>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row gap-2 pt-2">
-                    <a
-                      href={`https://wa.me/5531998765432?text=${encodeURIComponent(
-                        `Olá! Sou ${pedidoConcluido.compradorNome} e meu Pix de apoio na rifa Wicked 2026 foi aprovado com sucesso! Meus números são: ${pedidoConcluido.numeros.map((n) => `#${n}`).join(', ')}.`
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 py-3 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-lg"
-                    >
-                      <span>Avisar no WhatsApp</span>
-                    </a>
+                  {/* Aviso de Recibo enviado por e-mail */}
+                  <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-left flex items-start gap-3">
+                    <Mail className="w-5 h-5 text-[#00FF88] shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-xs font-bold text-white">Recibo enviado para seu e-mail</h4>
+                      <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                        O comprovante detalhado com seus números da sorte e instruções do sorteio foi encaminhado para <strong className="text-emerald-400">{pedidoConcluido.compradorEmail}</strong>.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
                     <button
                       type="button"
                       onClick={onClose}
-                      className="py-3 px-6 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-semibold transition-colors cursor-pointer"
+                      className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-[#00FF88] to-[#00CC6A] text-black font-bold text-sm hover:opacity-95 transition-all shadow-lg shadow-[#00FF88]/20 flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      Concluir
+                      <span>Concluir</span>
+                    </button>
+                  </div>
+                </div>
+              ) : pedidoExpirado ? (
+                /* TELA DE PEDIDO EXPIRADO COM COTAS LIBERADAS */
+                <div className="space-y-4 py-2">
+                  <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mx-auto text-rose-400">
+                    <AlertTriangle className="w-8 h-8" />
+                  </div>
+
+                  <div>
+                    <h3 className="font-cinzel text-xl sm:text-2xl font-bold text-white tracking-tight">
+                      Tempo de Pagamento Esgotado
+                    </h3>
+                    <p className="mt-1 text-slate-300 text-xs sm:text-sm">
+                      O Pix não foi identificado dentro do prazo limite de 20 minutos.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-black/50 border border-rose-500/30 text-left space-y-2">
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block">
+                      Aviso sobre os números:
+                    </span>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Para garantir a justiça da campanha e não prender cotas, os números reservados (<strong className="text-white">{pedidoConcluido.numeros.map((n) => `#${n}`).join(', ')}</strong>) voltaram a ficar disponíveis para todos os apoiadores.
+                    </p>
+                    <p className="text-[11px] text-amber-300/90 pt-1 border-t border-white/5">
+                      Se você ainda deseja participar, por favor inicie um novo pedido para gerar um novo código Pix.
+                    </p>
+                  </div>
+
+                  <div className="pt-2 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={handleReiniciarNovoPedido}
+                      className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-[#00FF88] to-[#00CC6A] text-black font-bold text-sm hover:opacity-95 transition-all shadow-lg shadow-[#00FF88]/20 flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <RotateCw className="w-4 h-4" />
+                      <span>Fazer Novo Pedido</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 text-xs font-medium transition-colors cursor-pointer"
+                    >
+                      Fechar
                     </button>
                   </div>
                 </div>
               ) : (
                 /* TELA DE PAGAMENTO PIX AGUARDANDO CONFIRMAÇÃO */
                 <div className="space-y-4">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[#00FF88] text-xs font-semibold">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>Pix Oficial Mercado Pago</span>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[#00FF88] text-xs font-semibold">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Pix Oficial Mercado Pago</span>
+                    </div>
+
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-semibold">
+                      <Clock className="w-3.5 h-3.5 animate-pulse" />
+                      <span>Expira em: <strong>{formatarTempo(segundosRestantes)}</strong></span>
+                    </div>
                   </div>
 
                   <div>

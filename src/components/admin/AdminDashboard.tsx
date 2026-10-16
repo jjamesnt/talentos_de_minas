@@ -4,7 +4,10 @@ import { useAdminUsuarios } from '../../hooks/useAdminUsuarios';
 import { useToast } from '../../hooks/useToast';
 import { supabase } from '../../lib/supabase';
 import { AdminBailarinos } from './AdminBailarinos';
+import { AdminPremios } from './AdminPremios';
 import { AdminRifa } from './AdminRifa';
+import { AdminLoja } from './AdminLoja';
+import { AdminFinanceiro } from './AdminFinanceiro';
 import { AdminUsuarios } from './AdminUsuarios';
 import { ErrorBoundary } from '../common/ErrorBoundary';
 import { TOTAL_COTAS } from '../../constants/campanha';
@@ -12,6 +15,8 @@ import {
   LayoutDashboard, 
   Users, 
   Ticket, 
+  ShoppingBag,
+  Wallet,
   ArrowLeft, 
   DollarSign, 
   TrendingUp, 
@@ -21,17 +26,21 @@ import {
   Check, 
   X, 
   Loader2,
-  CreditCard,
-  Clock,
   CheckCircle2,
-  RefreshCw
+  RefreshCw,
+  LogOut,
+  Gift
 } from 'lucide-react';
 
 import logoTalentos from '../../assets/logo_talentos.webp';
+import { ConfirmModal } from '../common/ConfirmModal';
 
-export const AdminDashboard: React.FC<{ onVoltarAoSite: () => void }> = ({ onVoltarAoSite }) => {
-  const [abaAtiva, setAbaAtiva] = useState<'kpi' | 'bailarinos' | 'rifa' | 'usuarios'>('kpi');
-  const { totalArrecadado, totalCotasVendidas, bailarinos, precoPorCota, atualizarPrecoPorCota } = useCampanha();
+export const AdminDashboard: React.FC<{ 
+  onVoltarAoSite: () => void;
+  onLogout?: () => void;
+}> = ({ onVoltarAoSite, onLogout }) => {
+  const [abaAtiva, setAbaAtiva] = useState<'kpi' | 'bailarinos' | 'premios' | 'rifa' | 'loja' | 'financeiro' | 'usuarios'>('kpi');
+  const { totalArrecadado, totalCotasVendidas, bailarinos, premios, precoPorCota, atualizarPrecoPorCota } = useCampanha();
   const { usuarios } = useAdminUsuarios();
   const { showToast } = useToast();
 
@@ -45,14 +54,60 @@ export const AdminDashboard: React.FC<{ onVoltarAoSite: () => void }> = ({ onVol
   const carregarPedidos = useCallback(async () => {
     try {
       setCarregandoPedidos(true);
-      const { data, error } = await supabase
+
+      // Auto-expira pedidos pendentes vencidos no banco de dados
+      try {
+        await supabase.rpc('expirar_pedidos_vencidos');
+      } catch (_) {}
+
+      // 1. Busca últimos pedidos pagos da Rifa (Cotas)
+      const { data: dadosCotas } = await supabase
         .from('raffle_orders')
         .select('*')
+        .eq('status', 'paid')
         .order('created_at', { ascending: false })
-        .limit(15);
-      if (!error && data) {
-        setPedidosRecentes(data);
-      }
+        .limit(20);
+
+      // 2. Busca últimos pedidos pagos da Loja Oficial
+      const { data: dadosLoja } = await supabase
+        .from('loja_orders')
+        .select('*')
+        .eq('status', 'paid')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      const cotasFormatadas = (dadosCotas || []).map((p: any) => ({
+        id: `cota-${p.id}`,
+        tipo: 'cota' as const,
+        customer_name: p.customer_name || 'Apoiador',
+        customer_contact: p.customer_phone || p.customer_email || '',
+        detalhes: Array.isArray(p.selected_numbers) && p.selected_numbers.length > 0
+          ? p.selected_numbers.map((n: number) => `#${n}`).join(', ')
+          : 'Cotas da Rifa',
+        valor: Number(p.total_price) || 0,
+        mp_payment_id: p.mp_payment_id,
+        payment_origin: p.payment_origin,
+        created_at: p.created_at,
+      }));
+
+      const lojaFormatadas = (dadosLoja || []).map((p: any) => ({
+        id: `loja-${p.id}`,
+        tipo: 'loja' as const,
+        customer_name: p.customer_name || 'Comprador',
+        customer_contact: p.customer_phone || p.customer_email || '',
+        detalhes: `${p.quantidade || 1}x ${p.produto_nome || 'Produto'}${p.tamanho ? ` (${p.tamanho})` : ''}`,
+        valor: Number(p.total_price) || 0,
+        mp_payment_id: p.mp_payment_id,
+        payment_origin: p.payment_origin,
+        created_at: p.created_at,
+      }));
+
+      // Combina e ordena os confirmados do mais recente ao mais antigo
+      const consolidados = [...cotasFormatadas, ...lojaFormatadas]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 15);
+
+      setPedidosRecentes(consolidados);
     } catch (err) {
       console.error('Erro ao buscar pedidos no painel:', err);
     } finally {
@@ -63,15 +118,23 @@ export const AdminDashboard: React.FC<{ onVoltarAoSite: () => void }> = ({ onVol
   useEffect(() => {
     carregarPedidos();
 
-    const canal = supabase
-      .channel('admin_realtime_orders')
+    const canalRifa = supabase
+      .channel('admin_realtime_orders_rifa')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'raffle_orders' }, () => {
         carregarPedidos();
       })
       .subscribe();
 
+    const canalLoja = supabase
+      .channel('admin_realtime_orders_loja')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loja_orders' }, () => {
+        carregarPedidos();
+      })
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(canal);
+      supabase.removeChannel(canalRifa);
+      supabase.removeChannel(canalLoja);
     };
   }, [carregarPedidos]);
 
@@ -110,35 +173,100 @@ export const AdminDashboard: React.FC<{ onVoltarAoSite: () => void }> = ({ onVol
     }
   };
 
+  const [confirmarVoltarSite, setConfirmarVoltarSite] = useState(false);
+  const [confirmarLogout, setConfirmarLogout] = useState(false);
+
+  const [usuarioLogado] = useState<{ nome: string; email: string; cargo: string } | null>(() => {
+    try {
+      const raw = localStorage.getItem('admin_usuario_atual');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const executarLogout = () => {
+    setConfirmarLogout(false);
+    sessionStorage.removeItem('talentos_admin_authenticated');
+    localStorage.removeItem('admin_usuario_atual');
+    if (onLogout) {
+      onLogout();
+    } else {
+      onVoltarAoSite();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-slate-100 flex flex-col">
       {/* Header Administrativo */}
       <header className="border-b border-white/10 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-18 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3 min-w-0">
+          {/* Logo Clicável com Confirmação */}
+          <button
+            type="button"
+            onClick={() => setConfirmarVoltarSite(true)}
+            className="flex items-center gap-3 min-w-0 text-left hover:opacity-90 transition-all cursor-pointer group rounded-xl p-1 -ml-1 focus:outline-none focus:ring-1 focus:ring-[#00FF88]/40"
+            title="Ir para a página pública da campanha"
+          >
             <img
               src={logoTalentos}
               alt="Talentos de Minas"
-              className="h-7 sm:h-8 w-auto object-contain shrink-0"
+              className="h-7 sm:h-8 w-auto object-contain shrink-0 group-hover:scale-105 transition-transform"
               width={140}
               height={32}
             />
             <div className="min-w-0 border-l border-white/10 pl-3">
-              <h1 className="font-cinzel text-xs sm:text-sm font-bold text-white leading-tight truncate">
+              <h1 className="font-cinzel text-xs sm:text-sm font-bold text-white leading-tight truncate group-hover:text-[#00FF88] transition-colors">
                 Painel Wicked 2026
               </h1>
-              <p className="text-[10px] text-[#D4AF37] truncate">Gestão Operacional</p>
+              <p className="text-[10px] text-[#D4AF37] truncate flex items-center gap-1.5">
+                <span>Gestão Operacional</span>
+                <span className="text-[9px] text-slate-400 opacity-70 group-hover:opacity-100 transition-opacity hidden sm:inline">
+                  • Ir ao site ↗
+                </span>
+              </p>
             </div>
-          </div>
-
-          <button
-            onClick={onVoltarAoSite}
-            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-semibold transition-all cursor-pointer shrink-0"
-          >
-            <ArrowLeft className="w-4 h-4 text-[#00FF88]" />
-            <span className="hidden xs:inline">Voltar ao Hotsite</span>
-            <span className="xs:hidden">Voltar</span>
           </button>
+
+          {/* Ações do Topo: Usuário, Voltar ao Hotsite e Sair */}
+          <div className="flex items-center gap-2 shrink-0">
+            {usuarioLogado && (
+              <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs">
+                <div className="w-6 h-6 rounded-lg bg-[#00FF88]/20 text-[#00FF88] flex items-center justify-center font-bold text-[10px]">
+                  {usuarioLogado.nome ? usuarioLogado.nome.charAt(0).toUpperCase() : 'U'}
+                </div>
+                <div className="text-left">
+                  <p className="text-[11px] font-bold text-white leading-tight truncate max-w-[130px]">
+                    {usuarioLogado.nome}
+                  </p>
+                  <p className="text-[9px] text-slate-400 leading-tight truncate max-w-[130px]">
+                    {usuarioLogado.cargo || 'Admin'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setConfirmarVoltarSite(true)}
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-semibold transition-all cursor-pointer"
+              title="Voltar para a página pública da campanha"
+            >
+              <ArrowLeft className="w-4 h-4 text-[#00FF88]" />
+              <span className="hidden xs:inline">Voltar ao Hotsite</span>
+              <span className="xs:hidden">Site</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setConfirmarLogout(true)}
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 border border-rose-500/30 text-xs font-bold transition-all cursor-pointer shadow-sm hover:shadow-rose-950/40"
+              title="Encerrar sessão no painel administrativo"
+            >
+              <LogOut className="w-4 h-4 text-rose-400" />
+              <span>Sair</span>
+            </button>
+          </div>
         </div>
 
         {/* Abas de Navegação com Rolagem Touch */}
@@ -168,6 +296,18 @@ export const AdminDashboard: React.FC<{ onVoltarAoSite: () => void }> = ({ onVol
           </button>
 
           <button
+            onClick={() => setAbaAtiva('premios')}
+            className={`py-2.5 sm:py-3 px-3 sm:px-4 text-xs font-semibold flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              abaAtiva === 'premios'
+                ? 'border-[#00FF88] text-[#00FF88]'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Gift className="w-4 h-4 shrink-0 text-[#D4AF37]" />
+            Prêmios ({premios.length})
+          </button>
+
+          <button
             onClick={() => setAbaAtiva('rifa')}
             className={`py-2.5 sm:py-3 px-3 sm:px-4 text-xs font-semibold flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               abaAtiva === 'rifa'
@@ -176,7 +316,31 @@ export const AdminDashboard: React.FC<{ onVoltarAoSite: () => void }> = ({ onVol
             }`}
           >
             <Ticket className="w-4 h-4 shrink-0" />
-            Mapa da Rifa (1.200)
+            Pedidos & Cotas (1.200)
+          </button>
+
+          <button
+            onClick={() => setAbaAtiva('loja')}
+            className={`py-2.5 sm:py-3 px-3 sm:px-4 text-xs font-semibold flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              abaAtiva === 'loja'
+                ? 'border-[#00FF88] text-[#00FF88]'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <ShoppingBag className="w-4 h-4 shrink-0 text-[#FF007F]" />
+            Loja & Pedidos
+          </button>
+
+          <button
+            onClick={() => setAbaAtiva('financeiro')}
+            className={`py-2.5 sm:py-3 px-3 sm:px-4 text-xs font-semibold flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              abaAtiva === 'financeiro'
+                ? 'border-[#00FF88] text-[#00FF88]'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Wallet className="w-4 h-4 shrink-0 text-[#00FF88]" />
+            Financeiro
           </button>
 
           <button
@@ -270,7 +434,7 @@ export const AdminDashboard: React.FC<{ onVoltarAoSite: () => void }> = ({ onVol
                         <span>Editar</span>
                       </button>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-1">Configuração da rifa ativa</p>
+                    <p className="text-[11px] text-slate-400 mt-1">Configuração da campanha ativa</p>
                   </div>
                 )}
               </div>
@@ -351,23 +515,23 @@ export const AdminDashboard: React.FC<{ onVoltarAoSite: () => void }> = ({ onVol
               )}
             </div>
 
-            {/* Monitoramento em Tempo Real de Pedidos Pix */}
+            {/* Monitoramento em Tempo Real de Pedidos Confirmados (Cotas & Loja) */}
             <div className="p-6 rounded-2xl glass-card border border-white/10 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[#00FF88] flex items-center justify-center">
-                    <CreditCard className="w-5 h-5" />
+                    <CheckCircle2 className="w-5 h-5" />
                   </div>
                   <div>
                     <h3 className="font-cinzel text-base font-bold text-white flex items-center gap-2">
-                      <span>Últimas Transações Pix (Mercado Pago)</span>
+                      <span>Últimos Pedidos Confirmados (Cotas & Loja)</span>
                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-sans font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
                         Tempo Real
                       </span>
                     </h3>
                     <p className="text-xs text-slate-400">
-                      Sincronização instantânea com a API do Mercado Pago
+                      Resumo unificado de todos os pagamentos aprovados no site (Rifa Beneficente e Loja Oficial)
                     </p>
                   </div>
                 </div>
@@ -385,7 +549,7 @@ export const AdminDashboard: React.FC<{ onVoltarAoSite: () => void }> = ({ onVol
 
               {pedidosRecentes.length === 0 ? (
                 <div className="py-8 text-center text-slate-400 text-xs italic border border-dashed border-white/10 rounded-xl">
-                  Nenhuma transação Pix registrada ainda. Assim que você gerar ou pagar um Pix de teste, ele aparecerá aqui instantaneamente!
+                  Nenhum pedido confirmado ainda. Assim que uma cota ou produto for pago via Pix ou manualmente, ele aparecerá aqui instantaneamente!
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -393,54 +557,71 @@ export const AdminDashboard: React.FC<{ onVoltarAoSite: () => void }> = ({ onVol
                     <thead>
                       <tr className="border-b border-white/10 text-slate-400 uppercase tracking-wider text-[10px]">
                         <th className="pb-3 font-semibold">Comprador</th>
-                        <th className="pb-3 font-semibold">Cotas</th>
+                        <th className="pb-3 font-semibold">Origem / Item</th>
                         <th className="pb-3 font-semibold">Valor</th>
-                        <th className="pb-3 font-semibold">Mercado Pago ID</th>
+                        <th className="pb-3 font-semibold">Identificador Pix</th>
                         <th className="pb-3 font-semibold">Status</th>
                         <th className="pb-3 font-semibold text-right">Data/Hora</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       {pedidosRecentes.map((pedido) => {
-                        const isPago = pedido.status === 'paid';
                         const dataFormatada = new Date(pedido.created_at).toLocaleString('pt-BR');
+                        const isCota = pedido.tipo === 'cota';
+
                         return (
                           <tr key={pedido.id} className="hover:bg-white/[0.02] transition-colors">
                             <td className="py-3">
                               <p className="font-semibold text-white">{pedido.customer_name}</p>
-                              <p className="text-[11px] text-slate-400">{pedido.customer_phone || pedido.customer_email}</p>
+                              {pedido.customer_contact && (
+                                <p className="text-[11px] text-slate-400">{pedido.customer_contact}</p>
+                              )}
                             </td>
-                            <td className="py-3 font-mono text-[#00FF88] font-bold">
-                              {Array.isArray(pedido.selected_numbers)
-                                ? pedido.selected_numbers.map((n: number) => `#${n}`).join(', ')
-                                : '-'}
+
+                            <td className="py-3">
+                              {isCota ? (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-[#00FF88] border border-emerald-500/20 whitespace-nowrap">
+                                    <Ticket className="w-3 h-3" />
+                                    <span>Cota Rifa</span>
+                                  </span>
+                                  <span className="font-mono text-xs text-white font-bold">{pedido.detalhes}</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-pink-500/10 text-[#FF007F] border border-pink-500/20 whitespace-nowrap">
+                                    <ShoppingBag className="w-3 h-3" />
+                                    <span>Loja Oficial</span>
+                                  </span>
+                                  <span className="text-xs text-slate-200 font-medium truncate max-w-[200px]">{pedido.detalhes}</span>
+                                </div>
+                              )}
                             </td>
-                            <td className="py-3 font-bold text-white">
-                              R$ {Number(pedido.total_price).toLocaleString('pt-BR')},00
+
+                            <td className="py-3 font-bold text-white whitespace-nowrap">
+                              R$ {Number(pedido.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </td>
-                            <td className="py-3 text-[11px] text-slate-400 font-mono">
+
+                            <td className="py-3 text-[11px] text-slate-400 font-mono whitespace-nowrap">
                               {pedido.mp_payment_id ? (
                                 <span className="text-slate-300 font-mono">
                                   #{pedido.mp_payment_id}
                                 </span>
+                              ) : pedido.payment_origin === 'manual' ? (
+                                <span className="text-emerald-400/80 font-medium">Pix Manual</span>
                               ) : (
-                                <span className="text-slate-500">Pendente de ID</span>
+                                <span className="text-slate-500 italic">Pix Aprovado</span>
                               )}
                             </td>
-                            <td className="py-3">
-                              {isPago ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  <span>Aprovado</span>
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30">
-                                  <Clock className="w-3.5 h-3.5" />
-                                  <span>Pendente</span>
-                                </span>
-                              )}
+
+                            <td className="py-3 whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Aprovado</span>
+                              </span>
                             </td>
-                            <td className="py-3 text-right text-slate-400 text-[11px]">
+
+                            <td className="py-3 text-right text-slate-400 text-[11px] whitespace-nowrap">
                               {dataFormatada}
                             </td>
                           </tr>
@@ -456,10 +637,39 @@ export const AdminDashboard: React.FC<{ onVoltarAoSite: () => void }> = ({ onVol
 
         <ErrorBoundary fallbackTitle="Erro ao carregar módulo administrativo">
           {abaAtiva === 'bailarinos' && <AdminBailarinos />}
+          {abaAtiva === 'premios' && <AdminPremios />}
           {abaAtiva === 'rifa' && <AdminRifa />}
+          {abaAtiva === 'loja' && <AdminLoja />}
+          {abaAtiva === 'financeiro' && <AdminFinanceiro />}
           {abaAtiva === 'usuarios' && <AdminUsuarios />}
         </ErrorBoundary>
       </main>
+
+      {/* Modal de Confirmação para Ir ao Site Público via Logo ou Botão */}
+      <ConfirmModal
+        isOpen={confirmarVoltarSite}
+        onClose={() => setConfirmarVoltarSite(false)}
+        onConfirm={() => {
+          setConfirmarVoltarSite(false);
+          onVoltarAoSite();
+        }}
+        title="Ir para a Página Pública"
+        message="Deseja sair do painel administrativo e navegar para a página pública da campanha dos Talentos de Minas?"
+        confirmLabel="Sim, ir para o site"
+        cancelLabel="Permanecer no painel"
+      />
+
+      {/* Modal de Confirmação de Logout */}
+      <ConfirmModal
+        isOpen={confirmarLogout}
+        onClose={() => setConfirmarLogout(false)}
+        onConfirm={executarLogout}
+        title="Encerrar Sessão"
+        message="Tem certeza que deseja sair do painel administrativo? Sua sessão será finalizada com segurança."
+        confirmLabel="Sim, Sair do Painel"
+        cancelLabel="Continuar Conectado"
+        isDestructive={true}
+      />
     </div>
   );
 };

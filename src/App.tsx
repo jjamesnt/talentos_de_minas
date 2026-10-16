@@ -64,12 +64,24 @@ export const MainApp: React.FC = () => {
     }
   };
 
+  const handleLogout = () => {
+    sessionStorage.removeItem('talentos_admin_authenticated');
+    localStorage.removeItem('admin_usuario_atual');
+    setIsAdminView(false);
+    if (isDirectAdmin) {
+      setIsAuthModalOpen(true);
+    }
+  };
+
   // Se estiver na rota direta /admin em nova aba
   if (isDirectAdmin) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] text-slate-100 flex flex-col font-sans selection:bg-[#00FF88] selection:text-black">
         {isAdminView ? (
-          <AdminDashboard onVoltarAoSite={handleVoltarAoSite} />
+          <AdminDashboard 
+            onVoltarAoSite={handleVoltarAoSite} 
+            onLogout={handleLogout}
+          />
         ) : (
           <div className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[#00FF88]/5 rounded-full blur-[140px] pointer-events-none" />
@@ -119,7 +131,10 @@ export const MainApp: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-slate-100 flex flex-col font-sans selection:bg-[#00FF88] selection:text-black">
       {isAdminView ? (
-        <AdminDashboard onVoltarAoSite={handleVoltarAoSite} />
+        <AdminDashboard 
+          onVoltarAoSite={handleVoltarAoSite} 
+          onLogout={handleLogout}
+        />
       ) : (
         <>
           <Navbar

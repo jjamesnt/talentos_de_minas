@@ -21,7 +21,7 @@ export const SeletorRifa: React.FC<SeletorRifaProps> = ({ onAbrirApoio }) => {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/60 border border-[#00FF88]/40 text-[11px] sm:text-xs font-semibold text-[#00FF88] uppercase tracking-wider mb-4 shadow-lg">
             <Ticket className="w-3.5 h-3.5" />
-            <span>Rifa Oficial • 1.200 Cotas da Sorte</span>
+            <span>Campanha Oficial • 1.200 Cotas da Sorte</span>
           </div>
 
           {/* Título Principal */}
@@ -34,7 +34,7 @@ export const SeletorRifa: React.FC<SeletorRifaProps> = ({ onAbrirApoio }) => {
 
           {/* Descrição */}
           <p className="mt-3 sm:mt-4 text-slate-300 text-xs sm:text-sm md:text-base max-w-xl leading-relaxed">
-            Cada cota de <strong className="text-white font-bold">R$ {precoPorCota},00</strong> apoia diretamente a viagem e os figurinos do bailarino de sua escolha. Ao avançar, você escolhe seu artista e sorteia seus números na nossa <strong className="text-[#00FF88]">Roleta Mágica</strong>!
+            Por apenas <strong className="text-white font-bold">R$ {precoPorCota},00</strong> por cota, você concorre a 5 prêmios incríveis e ainda ajuda a tornar real o sonho da sua bailarina favorita de participar do Festival Wicked 2026! Ao adquirir sua cota, você apoia diretamente os custos dessa jornada.
           </p>
 
           {/* Destaques Rápidos */}

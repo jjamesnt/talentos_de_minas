@@ -14,7 +14,11 @@ import {
   Loader2, 
   ShieldCheck, 
   RefreshCw,
-  Check 
+  Check,
+  AlertTriangle,
+  Clock,
+  RotateCw,
+  Mail
 } from 'lucide-react';
 import type { PedidoCheckout } from '../../types';
 
@@ -42,10 +46,40 @@ export const CheckoutModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
   const [isGeneratingPix, setIsGeneratingPix] = useState(false);
   const [pedidoPago, setPedidoPago] = useState(false);
   const [verificandoManual, setVerificandoManual] = useState(false);
+  const [segundosRestantes, setSegundosRestantes] = useState(1200);
+  const [pedidoExpirado, setPedidoExpirado] = useState(false);
 
   const bailarinoId = bailarinoIdManual ?? bailarinoSelecionadoId ?? bailarinos[0]?.id ?? '';
 
   const valorTotal = cotasSelecionadas.length * precoPorCota;
+
+  // Timer de 20 minutos para expiração do Pix
+  useEffect(() => {
+    if (!pedidoConcluido?.id || pedidoPago || pedidoExpirado) return;
+
+    const interval = setInterval(() => {
+      setSegundosRestantes((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setPedidoExpirado(true);
+          supabase
+            .from('raffle_orders')
+            .update({
+              status: 'expired',
+              status_updated_by: 'cliente_timeout',
+              status_updated_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', pedidoConcluido.id);
+          carregarDadosReais();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [pedidoConcluido?.id, pedidoPago, pedidoExpirado, carregarDadosReais]);
 
   // Monitoramento em tempo real via WebSocket do Supabase Realtime
   useEffect(() => {
@@ -70,6 +104,15 @@ export const CheckoutModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
               title: 'Pagamento Confirmado!',
               message: 'Seu Pix foi validado instantaneamente pelo Mercado Pago!',
               duration: 8000,
+            });
+          } else if (payload.new && (payload.new.status === 'expired' || payload.new.status === 'cancelled')) {
+            setPedidoExpirado(true);
+            carregarDadosReais();
+            showToast({
+              type: 'warning',
+              title: 'Tempo Esgotado',
+              message: 'O Pix não foi concluído dentro do prazo e as cotas voltaram a ficar disponíveis.',
+              duration: 7000,
             });
           }
         }
@@ -98,6 +141,14 @@ export const CheckoutModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
           type: 'success',
           title: 'Pagamento Confirmado!',
           message: 'Seu Pix já consta como aprovado no sistema.',
+        });
+      } else if (!error && (data?.status === 'expired' || data?.status === 'cancelled')) {
+        setPedidoExpirado(true);
+        carregarDadosReais();
+        showToast({
+          type: 'warning',
+          title: 'Tempo Esgotado',
+          message: 'Este pedido foi expirado e as cotas voltaram a ficar disponíveis.',
         });
       } else {
         showToast({
@@ -171,6 +222,8 @@ export const CheckoutModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
   const handleFecharTudo = () => {
     setPedidoConcluido(null);
     setPedidoPago(false);
+    setPedidoExpirado(false);
+    setSegundosRestantes(1200);
     setIsGeneratingPix(false);
     setNome('');
     setEmail('');
@@ -178,11 +231,25 @@ export const CheckoutModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
     onClose();
   };
 
+  const formatarTempo = (segundos: number) => {
+    const mins = Math.floor(segundos / 60);
+    const secs = segundos % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
+  const handleReiniciarNovoPedido = () => {
+    setPedidoConcluido(null);
+    setPedidoPago(false);
+    setPedidoExpirado(false);
+    setSegundosRestantes(1200);
+    carregarDadosReais();
+  };
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={handleFecharTudo}
-      title={pedidoConcluido ? 'Pagamento Pix & Confirmação' : 'Finalizar Apoio na Rifa Digital'}
+      title={pedidoConcluido ? 'Pagamento Pix & Confirmação' : 'Finalizar Apoio na Campanha Digital'}
       maxWidth="lg"
     >
       {!pedidoConcluido ? (
@@ -316,33 +383,83 @@ export const CheckoutModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
                 </p>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
-                <a
-                  href={`https://wa.me/5531998765432?text=${encodeURIComponent(
-                    `Olá! Sou ${pedidoConcluido.compradorNome} e meu Pix de apoio na rifa Wicked 2026 foi aprovado com sucesso! Meus números são: ${pedidoConcluido.numeros.map((n) => `#${n}`).join(', ')}.`
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 py-3 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-lg"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  <span>Avisar no WhatsApp</span>
-                </a>
+              {/* Aviso de Recibo enviado por e-mail */}
+              <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-left flex items-start gap-3">
+                <Mail className="w-5 h-5 text-[#00FF88] shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-xs font-bold text-white">Recibo enviado para seu e-mail</h4>
+                  <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                    O comprovante com seus números da sorte e instruções do sorteio foi encaminhado para <strong className="text-emerald-400">{pedidoConcluido.compradorEmail}</strong>.
+                  </p>
+                </div>
+              </div>
 
+              <div className="pt-2">
                 <button
                   onClick={handleFecharTudo}
-                  className="py-3 px-6 rounded-xl text-xs font-semibold bg-white/10 text-white hover:bg-white/20 transition-all cursor-pointer"
+                  className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-[#00FF88] to-[#00CC6A] text-black font-bold text-xs hover:opacity-95 transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  Concluir
+                  <span>Concluir</span>
+                </button>
+              </div>
+            </div>
+          ) : pedidoExpirado ? (
+            /* TELA DE PEDIDO EXPIRADO */
+            <div className="space-y-4 py-2 text-center">
+              <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mx-auto text-rose-400">
+                <AlertTriangle className="w-8 h-8" />
+              </div>
+
+              <div>
+                <h4 className="font-cinzel text-xl font-bold text-white">Tempo de Pagamento Esgotado</h4>
+                <p className="text-xs text-slate-300 mt-1">
+                  O Pix não foi concluído dentro do prazo limite de 20 minutos.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-black/50 border border-rose-500/30 text-left space-y-2">
+                <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block">
+                  Cotas Liberadas:
+                </span>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Para não prender números da campanha, as cotas (<strong className="text-white">{pedidoConcluido.numeros.map((n) => `#${n}`).join(', ')}</strong>) voltaram a ficar livres para todos os apoiadores.
+                </p>
+                <p className="text-[11px] text-amber-300/90 pt-1 border-t border-white/5">
+                  Por favor, gere um novo pedido para escolher seus números e concluir o apoio.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={handleReiniciarNovoPedido}
+                  className="w-full py-3 px-6 rounded-xl bg-gradient-to-r from-[#00FF88] to-[#00CC6A] text-black font-bold text-xs hover:opacity-95 transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <RotateCw className="w-4 h-4" />
+                  <span>Fazer Novo Pedido</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleFecharTudo}
+                  className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold bg-white/10 text-white hover:bg-white/20 transition-all cursor-pointer"
+                >
+                  Fechar
                 </button>
               </div>
             </div>
           ) : (
             /* AGUARDANDO PAGAMENTO */
             <div className="space-y-4">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[#00FF88] text-xs font-semibold">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Pix Automático Oficial Mercado Pago</span>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[#00FF88] text-xs font-semibold">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Pix Automático Oficial Mercado Pago</span>
+                </div>
+
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-semibold">
+                  <Clock className="w-3.5 h-3.5 animate-pulse" />
+                  <span>Expira em: <strong>{formatarTempo(segundosRestantes)}</strong></span>
+                </div>
               </div>
 
               <div>

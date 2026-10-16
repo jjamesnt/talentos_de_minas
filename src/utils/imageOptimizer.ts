@@ -88,3 +88,69 @@ export async function otimizarFotoBailarino(file: File, dimensao = 400, qualidad
   });
 }
 
+/**
+ * Redimensiona e comprime uma foto de prêmio para WebP de alta fidelidade (max 800px),
+ * garantindo nitidez para vitrines responsivas e peso médio reduzido (20KB - 50KB).
+ */
+export async function otimizarFotoPremio(file: File, maxDimensao = 800, qualidade = 0.85): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      reject(new Error('O arquivo selecionado não é uma imagem válida.'));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Erro ao ler arquivo da imagem.'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Erro ao processar imagem.'));
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxDimensao) {
+            height = Math.round((height * maxDimensao) / width);
+            width = maxDimensao;
+          }
+        } else {
+          if (height > maxDimensao) {
+            width = Math.round((width * maxDimensao) / height);
+            height = maxDimensao;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Canvas indisponível'));
+          return;
+        }
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const webpDataUrl = canvas.toDataURL('image/webp', qualidade);
+        resolve(webpDataUrl);
+      };
+
+      img.src = e.target?.result as string;
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Calcula o tamanho aproximado em KB de uma imagem em Base64 Data URL
+ */
+export function obterTamanhoKB(dataUrl: string): number {
+  if (!dataUrl) return 0;
+  const base64Str = dataUrl.split(',')[1] || dataUrl;
+  return Math.round((base64Str.length * 3) / 4 / 1024);
+}
+

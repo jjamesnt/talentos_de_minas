@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { Bailarino, CotaRifa, PedidoCheckout } from '../types';
-import { PRECO_POR_COTA, TOTAL_COTAS } from '../constants/campanha';
+import type { Bailarino, CotaRifa, PedidoCheckout, Premio } from '../types';
+import { PRECO_POR_COTA, TOTAL_COTAS, PREMIOS_OFICIAIS } from '../constants/campanha';
 import { AVATAR_PADRAO_BAILARINO } from '../utils/imageOptimizer';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface CampanhaContextData {
   cotas: CotaRifa[];
   bailarinos: Bailarino[];
+  premios: Premio[];
   cotasSelecionadas: number[];
   bailarinoSelecionadoId: string | null;
   totalArrecadado: number;
@@ -19,6 +20,10 @@ interface CampanhaContextData {
   concluirPedido: (dados: { nome: string; email: string; whatsapp: string; bailarinoId: string; cotasCustom?: number[] }) => Promise<PedidoCheckout>;
   adicionarBailarino: (dados: { nome: string; fotoUrl: string; meta: number }) => Promise<void>;
   editarBailarino: (id: string, dados: Partial<Bailarino>) => Promise<void>;
+  adicionarPremio: (dados: Omit<Premio, 'id'>) => Promise<void>;
+  editarPremio: (id: string, dados: Partial<Premio>) => Promise<void>;
+  excluirPremio: (id: string) => Promise<void>;
+  reordenarPremios: (premiosOrdenados: Premio[]) => Promise<void>;
   baixaManualCota: (numero: number, dados: { compradorNome: string; compradorEmail?: string; compradorWhatsapp?: string; bailarinoId: string }) => Promise<void>;
   liberarCota: (numero: number) => Promise<void>;
   precoPorCota: number;
@@ -45,6 +50,7 @@ function criarCotasVazias(): CotaRifa[] {
 export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [cotas, setCotas] = useState<CotaRifa[]>(() => criarCotasVazias());
   const [bailarinos, setBailarinos] = useState<Bailarino[]>([]);
+  const [premios, setPremios] = useState<Premio[]>(PREMIOS_OFICIAIS);
   const [cotasSelecionadas, setCotasSelecionadas] = useState<number[]>([]);
   const [bailarinoSelecionadoId, setBailarinoSelecionadoId] = useState<string | null>(null);
   const [precoPorCota, setPrecoPorCota] = useState<number>(PRECO_POR_COTA);
@@ -91,7 +97,32 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
 
-      // 3. Carrega slots atômicos e pedidos para proteger cotas pagas/reservadas
+      // 3. Carrega prêmios oficiais da vitrine
+      const { data: pData, error: pError } = await supabase
+        .from('premios')
+        .select('*')
+        .order('posicao', { ascending: true });
+
+      if (!pError && pData && pData.length > 0) {
+        const mapeadosPremios: Premio[] = pData.map((p: any) => ({
+          id: p.id,
+          posicao: p.posicao,
+          titulo: p.titulo,
+          subtitulo: p.subtitulo || '',
+          fotoUrl: p.foto_url || '',
+          destaque: p.destaque ?? false,
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+        }));
+        setPremios(mapeadosPremios);
+      }
+
+      // 4. Carrega slots atômicos e pedidos para proteger cotas pagas/reservadas
+      // 0. Auto-expira pedidos pendentes com mais de 20 minutos e libera cotas
+      try {
+        await supabase.rpc('expirar_pedidos_vencidos');
+      } catch (_) {}
+
       const { data: slotsData } = await supabase
         .from('cota_slots')
         .select('*');
@@ -177,6 +208,11 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'campanha_config' },
+        () => carregarDadosReais()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'premios' },
         () => carregarDadosReais()
       )
       .subscribe();
@@ -310,7 +346,7 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             total_price: valorTotal,
             customer_name: dados.nome,
             customer_email: dados.email,
-            description: `Talentos de Minas - ${cotasParaSalvar.length} cota(s) rifa Wicked 2026`,
+            description: `Talentos de Minas - ${cotasParaSalvar.length} cota(s) apoio Wicked 2026`,
           },
         });
 
@@ -388,6 +424,80 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const adicionarPremio = async (dados: Omit<Premio, 'id'>) => {
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('premios').insert([
+        {
+          posicao: dados.posicao,
+          titulo: dados.titulo,
+          subtitulo: dados.subtitulo,
+          foto_url: dados.fotoUrl || null,
+          destaque: dados.destaque ?? false,
+        },
+      ]);
+      if (error) {
+        console.error('Erro ao adicionar prêmio:', error);
+        throw error;
+      }
+      await carregarDadosReais();
+    }
+  };
+
+  const editarPremio = async (id: string, dados: Partial<Premio>) => {
+    if (isSupabaseConfigured) {
+      const payload: any = {
+        updated_at: new Date().toISOString(),
+      };
+      if (dados.posicao !== undefined) payload.posicao = dados.posicao;
+      if (dados.titulo !== undefined) payload.titulo = dados.titulo;
+      if (dados.subtitulo !== undefined) payload.subtitulo = dados.subtitulo;
+      if (dados.fotoUrl !== undefined) payload.foto_url = dados.fotoUrl;
+      if (dados.destaque !== undefined) payload.destaque = dados.destaque;
+
+      const { error } = await supabase
+        .from('premios')
+        .update(payload)
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao editar prêmio:', error);
+        throw error;
+      }
+      await carregarDadosReais();
+    }
+  };
+
+  const excluirPremio = async (id: string) => {
+    if (isSupabaseConfigured) {
+      const { error } = await supabase
+        .from('premios')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao excluir prêmio:', error);
+        throw error;
+      }
+      await carregarDadosReais();
+    }
+  };
+
+  const reordenarPremios = async (novosPremios: Premio[]) => {
+    setPremios(novosPremios);
+    if (isSupabaseConfigured) {
+      for (let i = 0; i < novosPremios.length; i++) {
+        const p = novosPremios[i];
+        if (p.id) {
+          await supabase
+            .from('premios')
+            .update({ posicao: i + 1, updated_at: new Date().toISOString() })
+            .eq('id', p.id);
+        }
+      }
+      await carregarDadosReais();
+    }
+  };
+
   const baixaManualCota = async (
     numero: number,
     dados: { compradorNome: string; compradorEmail?: string; compradorWhatsapp?: string; bailarinoId: string }
@@ -400,7 +510,7 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           customer_phone: dados.compradorWhatsapp || '31999999999',
           bailarino_id: dados.bailarinoId,
           selected_numbers: [numero],
-          total_price: PRECO_POR_COTA,
+          total_price: precoPorCota,
           status: 'paid', // Baixa manual administrativa já entra como paga
         },
       ]);
@@ -430,6 +540,35 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const confirmarPedidoManual = async (orderId: string) => {
     if (isSupabaseConfigured) {
+      // 1. Busca o pedido para checar os números e o status atual
+      const { data: order, error: oErr } = await supabase
+        .from('raffle_orders')
+        .select('*')
+        .eq('id', orderId)
+        .single();
+
+      if (oErr || !order) {
+        throw new Error('Pedido não encontrado no banco de dados.');
+      }
+
+      if (order.status === 'expired') {
+        throw new Error('Este pedido está expirado e suas cotas foram liberadas. O comprador precisa iniciar um novo pedido.');
+      }
+
+      // 2. REGRA INQUEBRÁVEL: Checa se alguma das cotas já foi comprada por outro apoiador
+      const numeros = order.selected_numbers || [];
+      if (numeros.length > 0) {
+        const { data: slotsOcupados } = await supabase
+          .from('cota_slots')
+          .select('numero, status, order_id')
+          .in('numero', numeros);
+
+        const conflito = slotsOcupados?.find((s: any) => s.status === 'paid' && s.order_id !== orderId);
+        if (conflito) {
+          throw new Error(`A cota #${conflito.numero} já foi adquirida por outro apoiador! Não é permitido dar baixa neste pedido. Solicite um novo pedido ao comprador.`);
+        }
+      }
+
       await supabase
         .from('raffle_orders')
         .update({
@@ -464,6 +603,7 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       value={{
         cotas,
         bailarinos,
+        premios,
         cotasSelecionadas,
         bailarinoSelecionadoId,
         totalArrecadado,
@@ -478,6 +618,10 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         concluirPedido,
         adicionarBailarino,
         editarBailarino,
+        adicionarPremio,
+        editarPremio,
+        excluirPremio,
+        reordenarPremios,
         baixaManualCota,
         liberarCota,
         carregarDadosReais,
