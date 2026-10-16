@@ -18,8 +18,10 @@ interface CampanhaContextData {
   limparSelecao: () => void;
   setBailarinoSelecionadoId: (id: string | null) => void;
   concluirPedido: (dados: { nome: string; email: string; whatsapp: string; bailarinoId: string; cotasCustom?: number[] }) => Promise<PedidoCheckout>;
-  adicionarBailarino: (dados: { nome: string; fotoUrl: string; meta: number }) => Promise<void>;
+  adicionarBailarino: (dados: { nome: string; fotoUrl: string; meta?: number }) => Promise<void>;
   editarBailarino: (id: string, dados: Partial<Bailarino>) => Promise<void>;
+  excluirBailarino: (id: string) => Promise<void>;
+  recalcularMetasBailarinos: () => Promise<void>;
   adicionarPremio: (dados: Omit<Premio, 'id'>) => Promise<void>;
   editarPremio: (id: string, dados: Partial<Premio>) => Promise<void>;
   excluirPremio: (id: string) => Promise<void>;
@@ -390,8 +392,33 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return novoPedido;
   };
 
+  // Recalcula e redistribui automaticamente a meta entre os bailarinos ativos (1.200 cotas ÷ total ativos)
+  const recalcularMetasBailarinos = async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const { data: bData, error } = await supabase
+        .from('bailarinos')
+        .select('id, ativo');
+
+      if (error || !bData || bData.length === 0) return;
+
+      const ativos = bData.filter((b: any) => b.ativo !== false);
+      if (ativos.length === 0) return;
+
+      const novaMeta = Math.round(TOTAL_COTAS / ativos.length);
+
+      const updates = ativos.map((b: any) =>
+        supabase.from('bailarinos').update({ meta: novaMeta }).eq('id', b.id)
+      );
+
+      await Promise.all(updates);
+    } catch (err) {
+      console.error('Erro ao recalcular metas dos bailarinos:', err);
+    }
+  };
+
   // Gestão Administrativa integrada com Supabase
-  const adicionarBailarino = async (dados: { nome: string; fotoUrl: string; meta: number }) => {
+  const adicionarBailarino = async (dados: { nome: string; fotoUrl: string; meta?: number }) => {
     const id = `b-${Date.now()}`;
     if (isSupabaseConfigured) {
       await supabase.from('bailarinos').insert([
@@ -399,12 +426,13 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           id,
           nome: dados.nome,
           foto_url: dados.fotoUrl,
-          meta: dados.meta,
+          meta: dados.meta || 100,
           total_vendido: 0,
           total_apoios: 0,
           ativo: true,
         },
       ]);
+      await recalcularMetasBailarinos();
       await carregarDadosReais();
     }
   };
@@ -420,6 +448,24 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           ativo: dados.ativo,
         })
         .eq('id', id);
+
+      if (dados.ativo !== undefined) {
+        await recalcularMetasBailarinos();
+      }
+
+      await carregarDadosReais();
+    }
+  };
+
+  const excluirBailarino = async (id: string) => {
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('bailarinos').delete().eq('id', id);
+      if (error) {
+        console.error('Erro ao excluir bailarino:', error);
+        throw error;
+      }
+      setBailarinos((prev) => prev.filter((b) => b.id !== id));
+      await recalcularMetasBailarinos();
       await carregarDadosReais();
     }
   };
@@ -618,6 +664,8 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         concluirPedido,
         adicionarBailarino,
         editarBailarino,
+        excluirBailarino,
+        recalcularMetasBailarinos,
         adicionarPremio,
         editarPremio,
         excluirPremio,

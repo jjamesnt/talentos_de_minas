@@ -2,24 +2,78 @@ import React, { useState, useRef } from 'react';
 import { useCampanha } from '../../hooks/useCampanha';
 import { useToast } from '../../hooks/useToast';
 import { ConfirmModal } from '../common/ConfirmModal';
-import { UserPlus, Edit2, CheckCircle2, XCircle, Upload, Image, Trash2, Camera, Loader2, Sparkles } from 'lucide-react';
+import { UserPlus, Edit2, CheckCircle2, XCircle, Upload, Image, Trash2, Camera, Loader2, Sparkles, RefreshCw } from 'lucide-react';
 import type { Bailarino } from '../../types';
 import { otimizarFotoBailarino, AVATAR_PADRAO_BAILARINO } from '../../utils/imageOptimizer';
 
 export const AdminBailarinos: React.FC = () => {
-  const { bailarinos, adicionarBailarino, editarBailarino } = useCampanha();
+  const { bailarinos, adicionarBailarino, editarBailarino, excluirBailarino, recalcularMetasBailarinos } = useCampanha();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
 
   const [nome, setNome] = useState('');
   const [fotoUrl, setFotoUrl] = useState('');
-  const [meta, setMeta] = useState('100');
+  const [meta, setMeta] = useState('120');
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [isOtimizando, setIsOtimizando] = useState(false);
+  const [isRecalculando, setIsRecalculando] = useState(false);
+
+  const bailarinosAtivos = bailarinos.filter((b) => b.ativo);
+  const metaCalculadaAtual = bailarinosAtivos.length > 0 ? Math.round(1200 / bailarinosAtivos.length) : 120;
+  const metaSugeridaNovo = Math.round(1200 / (bailarinosAtivos.length + 1));
+
+  const handleRecalcularTodasMetas = async () => {
+    try {
+      setIsRecalculando(true);
+      await recalcularMetasBailarinos();
+      showToast({
+        type: 'success',
+        title: 'Metas Recalculadas',
+        message: `As 1.200 cotas foram redistribuídas igualmente entre os ${bailarinosAtivos.length} participantes ativos (${metaCalculadaAtual} cotas cada).`,
+      });
+    } catch (err: any) {
+      console.error('Erro ao recalcular metas:', err);
+      showToast({
+        type: 'error',
+        title: 'Erro no Recálculo',
+        message: err.message || 'Não foi possível redistribuir as metas.',
+      });
+    } finally {
+      setIsRecalculando(false);
+    }
+  };
 
   // Modal de confirmação para inativar/ativar
   const [bailarinoStatusToggle, setBailarinoStatusToggle] = useState<Bailarino | null>(null);
+
+  // Modal de confirmação para exclusão definitiva
+  const [bailarinoParaExcluir, setBailarinoParaExcluir] = useState<Bailarino | null>(null);
+  const [isExcluindo, setIsExcluindo] = useState(false);
+
+  const handleConfirmarExclusao = async () => {
+    if (!bailarinoParaExcluir) return;
+
+    try {
+      setIsExcluindo(true);
+      await excluirBailarino(bailarinoParaExcluir.id);
+      showToast({
+        type: 'success',
+        title: 'Bailarino Excluído',
+        message: `O participante "${bailarinoParaExcluir.nome}" foi removido com sucesso da campanha.`,
+      });
+      setBailarinoParaExcluir(null);
+    } catch (err: any) {
+      console.error('Erro ao excluir bailarino:', err);
+      showToast({
+        type: 'error',
+        title: 'Erro na Exclusão',
+        message: err.message || 'Não foi possível excluir o bailarino.',
+      });
+    } finally {
+      setIsExcluindo(false);
+    }
+  };
 
   const handleFotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -55,28 +109,28 @@ export const AdminBailarinos: React.FC = () => {
     }
   };
 
-  const handleSalvar = (e: React.FormEvent) => {
+  const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nome.trim()) {
       showToast({ type: 'warning', title: 'Campo Obrigatório', message: 'Informe o nome do bailarino.' });
       return;
     }
 
-    const metaNum = parseInt(meta, 10) || 100;
+    const metaNum = parseInt(meta, 10) || (editandoId ? metaCalculadaAtual : metaSugeridaNovo);
     const fotoFinal = fotoUrl.trim() || AVATAR_PADRAO_BAILARINO;
 
     if (editandoId) {
-      editarBailarino(editandoId, { nome, fotoUrl: fotoFinal, meta: metaNum });
+      await editarBailarino(editandoId, { nome, fotoUrl: fotoFinal, meta: metaNum });
       showToast({ type: 'success', title: 'Perfil Atualizado', message: `Dados e foto de ${nome} salvos com sucesso.` });
       setEditandoId(null);
     } else {
-      adicionarBailarino({ nome, fotoUrl: fotoFinal, meta: metaNum });
-      showToast({ type: 'success', title: 'Bailarino Cadastrado', message: `${nome} adicionado(a) à campanha.` });
+      await adicionarBailarino({ nome, fotoUrl: fotoFinal, meta: metaNum });
+      showToast({ type: 'success', title: 'Bailarino Cadastrado', message: `${nome} adicionado(a) e as metas foram recalculadas automaticamente.` });
     }
 
     setNome('');
     setFotoUrl('');
-    setMeta('100');
+    setMeta(metaCalculadaAtual.toString());
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -96,7 +150,7 @@ export const AdminBailarinos: React.FC = () => {
     setEditandoId(null);
     setNome('');
     setFotoUrl('');
-    setMeta('100');
+    setMeta(metaCalculadaAtual.toString());
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -243,7 +297,12 @@ export const AdminBailarinos: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Meta Individual (cotas)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-slate-300">Meta Individual (cotas)</label>
+                  <span className="text-[11px] font-semibold text-[#00FF88] flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" /> Distribuição Automática
+                  </span>
+                </div>
                 <input
                   type="number"
                   min="1"
@@ -251,6 +310,11 @@ export const AdminBailarinos: React.FC = () => {
                   onChange={(e) => setMeta(e.target.value)}
                   className="w-full sm:w-48 px-4 py-2.5 rounded-xl text-sm bg-black/40 border border-white/10 text-white focus:outline-none focus:border-[#00FF88]"
                 />
+                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                  {editandoId
+                    ? 'Meta atual do participante. Ao salvar, as metas de todos os ativos podem ser sincronizadas.'
+                    : `Sugerido: ${metaSugeridaNovo} cotas (1.200 ÷ ${bailarinosAtivos.length + 1} ativos). As metas de todos serão redistribuídas automaticamente.`}
+                </p>
               </div>
             </div>
           </div>
@@ -274,6 +338,43 @@ export const AdminBailarinos: React.FC = () => {
             </button>
           </div>
         </form>
+      </div>
+
+      {/* Banner Informativo de Divisão Automática de Cotas */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#0F3D2A]/60 via-[#0F3D2A]/30 to-black/40 border border-[#00FF88]/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-[#00FF88]/10 border border-[#00FF88]/30 flex items-center justify-center text-[#00FF88] shrink-0 shadow-inner">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-semibold text-white">Recálculo e Divisão Automática de Metas</h4>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#00FF88]/10 text-[#00FF88] border border-[#00FF88]/30">
+                1.200 Cotas Totais
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 mt-1">
+              {bailarinosAtivos.length > 0 ? (
+                <>
+                  <strong className="text-emerald-400">{bailarinosAtivos.length}</strong> participantes ativos &bull; Meta proporcional de <strong className="text-[#00FF88]">{metaCalculadaAtual} cotas</strong> cada (recalculada automaticamente ao adicionar, excluir ou inativar).
+                </>
+              ) : (
+                'Nenhum bailarino ativo cadastrado no momento.'
+              )}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleRecalcularTodasMetas}
+          disabled={isRecalculando || bailarinosAtivos.length === 0}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-[#00FF88]/15 hover:bg-[#00FF88]/25 text-[#00FF88] border border-[#00FF88]/30 transition-all cursor-pointer shadow-sm hover:shadow-[#00FF88]/10 disabled:opacity-50 shrink-0"
+          title="Recalcular e sincronizar as metas de todos os participantes agora"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isRecalculando ? 'animate-spin' : ''}`} />
+          <span>{isRecalculando ? 'Recalculando...' : 'Recalcular Metas Agora'}</span>
+        </button>
       </div>
 
       {/* Tabela de Bailarinos Cadastrados com Ações Completas */}
@@ -320,13 +421,22 @@ export const AdminBailarinos: React.FC = () => {
                       </button>
                     </td>
                     <td className="px-4 sm:px-6 py-3.5 text-right">
-                      <button
-                        onClick={() => iniciarEdicao(b)}
-                        className="p-2 rounded-xl bg-white/5 hover:bg-[#00FF88]/20 text-slate-300 hover:text-[#00FF88] border border-white/10 transition-colors cursor-pointer"
-                        title="Editar dados e foto"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => iniciarEdicao(b)}
+                          className="p-2 rounded-xl bg-white/5 hover:bg-[#00FF88]/20 text-slate-300 hover:text-[#00FF88] border border-white/10 transition-colors cursor-pointer"
+                          title="Editar dados e foto"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setBailarinoParaExcluir(b)}
+                          className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/20 transition-colors cursor-pointer"
+                          title="Excluir bailarino da campanha"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -361,6 +471,25 @@ export const AdminBailarinos: React.FC = () => {
         message={`Deseja realmente ${bailarinoStatusToggle?.ativo ? 'inativar' : 'reativar'} o participante "${bailarinoStatusToggle?.nome}"? ${bailarinoStatusToggle?.ativo ? 'Ele deixará de aparecer para novas compras na página pública.' : 'Ele voltará a receber apoios no ranking público.'}`}
         confirmLabel={bailarinoStatusToggle?.ativo ? 'Inativar' : 'Reativar'}
         isDestructive={bailarinoStatusToggle?.ativo}
+      />
+
+      {/* Modal de Confirmação para Exclusão Definitiva */}
+      <ConfirmModal
+        isOpen={bailarinoParaExcluir !== null}
+        onClose={() => !isExcluindo && setBailarinoParaExcluir(null)}
+        onConfirm={handleConfirmarExclusao}
+        title="Excluir Bailarino da Campanha"
+        message={
+          bailarinoParaExcluir
+            ? `Tem certeza que deseja excluir o(a) bailarino(a) "${bailarinoParaExcluir.nome}"? Esta ação removerá o participante da campanha.${
+                bailarinoParaExcluir.totalVendido > 0
+                  ? ` ATENÇÃO: Este bailarino já possui ${bailarinoParaExcluir.totalVendido} cota(s) vendida(s).`
+                  : ''
+              }`
+            : ''
+        }
+        confirmLabel={isExcluindo ? 'Excluindo...' : 'Sim, Excluir'}
+        isDestructive={true}
       />
     </div>
   );
