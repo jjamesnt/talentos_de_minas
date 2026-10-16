@@ -226,12 +226,6 @@ export const VitrinePremios: React.FC = () => {
                     {premio.subtitulo}
                   </p>
                 </div>
-
-                {/* Rodapé Padronizado da Campanha */}
-                <div className="mt-5 pt-4 border-t border-white/5 flex items-center justify-between text-xs text-slate-400">
-                  <span>Campanha Oficial Wicked 2026</span>
-                  <span className="text-[#00FF88] font-bold font-mono">1.200 Cotas</span>
-                </div>
               </div>
             );
           })}
