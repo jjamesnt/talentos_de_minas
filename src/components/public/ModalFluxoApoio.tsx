@@ -11,9 +11,13 @@ import {
   Ticket, 
   QrCode, 
   Copy, 
-  CheckCircle2 
+  CheckCircle2,
+  Loader2,
+  ShieldCheck,
+  RefreshCw
 } from 'lucide-react';
 import { z } from 'zod';
+import { supabase } from '../../lib/supabase';
 import { useCampanha } from '../../hooks/useCampanha';
 import { useToast } from '../../hooks/useToast';
 import { RoletaWicked } from '../sorteio/RoletaWicked';
@@ -50,6 +54,7 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
     selecionarCotasEmLote,
     concluirPedido,
     precoPorCota,
+    carregarDadosReais,
   } = useCampanha();
   const { showToast } = useToast();
 
@@ -72,6 +77,9 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
   const [erros, setErros] = useState<Record<string, string>>({});
   const [pedidoConcluido, setPedidoConcluido] = useState<PedidoCheckout | null>(null);
   const [pixCopiado, setPixCopiado] = useState(false);
+  const [isGeneratingPix, setIsGeneratingPix] = useState(false);
+  const [pedidoPago, setPedidoPago] = useState(false);
+  const [verificandoManual, setVerificandoManual] = useState(false);
 
   // Sincroniza abertura do modal e pré-seleção
   useEffect(() => {
@@ -89,9 +97,76 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
       setNumerosSorteados([]);
       setIndicesFixados([]);
       setPedidoConcluido(null);
+      setPedidoPago(false);
+      setIsGeneratingPix(false);
       setErros({});
     }
   }, [isOpen, bailarinoPreSelecionadoId]);
+
+  // Monitoramento em tempo real via WebSocket do Supabase Realtime
+  useEffect(() => {
+    if (!pedidoConcluido?.id || pedidoPago) return;
+
+    const channel = supabase
+      .channel(`order_status:${pedidoConcluido.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'raffle_orders',
+          filter: `id=eq.${pedidoConcluido.id}`,
+        },
+        (payload) => {
+          if (payload.new && payload.new.status === 'paid') {
+            setPedidoPago(true);
+            carregarDadosReais();
+            showToast({
+              type: 'success',
+              title: 'Pagamento Confirmado!',
+              message: 'Seu Pix foi aprovado em tempo real pelo Mercado Pago. Suas cotas estão garantidas!',
+              duration: 8000,
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [pedidoConcluido?.id, pedidoPago, carregarDadosReais, showToast]);
+
+  const verificarStatusManual = async () => {
+    if (!pedidoConcluido?.id) return;
+    setVerificandoManual(true);
+    try {
+      const { data, error } = await supabase
+        .from('raffle_orders')
+        .select('status')
+        .eq('id', pedidoConcluido.id)
+        .single();
+
+      if (!error && data?.status === 'paid') {
+        setPedidoPago(true);
+        carregarDadosReais();
+        showToast({
+          type: 'success',
+          title: 'Pagamento Confirmado!',
+          message: 'Seu Pix já consta como aprovado no sistema.',
+        });
+      } else {
+        showToast({
+          type: 'info',
+          title: 'Aguardando compensação',
+          message: 'O Pix ainda não foi compensado pelo banco. Se acabou de pagar, aguarde alguns segundos.',
+        });
+      }
+    } catch (_) {
+    } finally {
+      setVerificandoManual(false);
+    }
+  };
 
   const bailarinoAtivo = bailarinoIdEscolhido === 'campanha-geral'
     ? {
@@ -178,7 +253,7 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
     }
   };
 
-  const handleFinalizarCheckout = (e: React.FormEvent) => {
+  const handleFinalizarCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     setErros({});
 
@@ -207,22 +282,35 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
       return;
     }
 
-    const pedido = concluirPedido({
-      nome,
-      email,
-      whatsapp,
-      bailarinoId: bailarinoIdEscolhido,
-    });
+    setIsGeneratingPix(true);
+    try {
+      const pedido = await concluirPedido({
+        nome,
+        email,
+        whatsapp,
+        bailarinoId: bailarinoIdEscolhido,
+        cotasCustom: numerosSorteados,
+      });
 
-    setPedidoConcluido(pedido);
-    setEtapa('sucesso_pix');
+      setPedidoConcluido(pedido);
+      setEtapa('sucesso_pix');
 
-    showToast({
-      type: 'success',
-      title: 'Apoio Registrado com Sucesso!',
-      message: 'Efetue o pagamento Pix para confirmar suas cotas.',
-      duration: 6000,
-    });
+      showToast({
+        type: 'success',
+        title: 'Pix Oficial Gerado!',
+        message: 'Efetue o pagamento Pix para confirmar suas cotas.',
+        duration: 6000,
+      });
+    } catch (err: any) {
+      console.error('Erro ao gerar pedido Pix:', err);
+      showToast({
+        type: 'error',
+        title: 'Falha ao gerar Pix',
+        message: err?.message || 'Não foi possível gerar a cobrança Pix. Tente novamente.',
+      });
+    } finally {
+      setIsGeneratingPix(false);
+    }
   };
 
   const copiarPix = () => {
@@ -689,10 +777,20 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
 
                 <button
                   type="submit"
-                  className="w-full mt-2 py-3.5 rounded-xl font-cinzel text-xs font-bold uppercase tracking-wider bg-[#00FF88] hover:bg-[#33ff9f] text-black glow-oz transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xl min-h-[46px]"
+                  disabled={isGeneratingPix}
+                  className="w-full mt-2 py-3.5 rounded-xl font-cinzel text-xs font-bold uppercase tracking-wider bg-[#00FF88] hover:bg-[#33ff9f] disabled:bg-[#00FF88]/50 disabled:cursor-not-allowed text-black glow-oz transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xl min-h-[46px]"
                 >
-                  <Ticket className="w-4 h-4" />
-                  <span>Gerar Pix de R$ {valorTotal.toFixed(2).replace('.', ',')}</span>
+                  {isGeneratingPix ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-black" />
+                      <span>Gerando Pix Oficial Mercado Pago...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Ticket className="w-4 h-4" />
+                      <span>Gerar Pix de R$ {valorTotal.toFixed(2).replace('.', ',')}</span>
+                    </>
+                  )}
                 </button>
               </form>
             </motion.div>
@@ -706,59 +804,147 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
               animate={{ opacity: 1, scale: 1 }}
               className="space-y-4 text-center"
             >
-              <div className="w-12 h-12 rounded-full bg-[#00FF88]/20 border border-[#00FF88] text-[#00FF88] flex items-center justify-center mx-auto">
-                <CheckCircle2 className="w-6 h-6" />
-              </div>
+              {pedidoPago ? (
+                /* TELA DE CELEBRAÇÃO: PAGAMENTO CONFIRMADO EM TEMPO REAL */
+                <div className="py-2 space-y-4 animate-in fade-in zoom-in-95 duration-300">
+                  <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-400 text-emerald-400 flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(16,185,129,0.3)]">
+                    <CheckCircle2 className="w-10 h-10 animate-bounce" />
+                  </div>
 
-              <div>
-                <h3 className="font-cinzel text-xl sm:text-2xl font-bold text-white tracking-tight">
-                  Reserva Gerada com Sucesso!
-                </h3>
-                <p className="mt-1 text-slate-300 text-xs sm:text-sm">
-                  Pague via Pix em até 15 minutos para garantir seus números da sorte.
-                </p>
-              </div>
+                  <div>
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold mb-2">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Pagamento Aprovado Instantaneamente</span>
+                    </div>
+                    <h3 className="font-cinzel text-2xl font-bold text-white tracking-tight">
+                      Parabéns, {pedidoConcluido.compradorNome}!
+                    </h3>
+                    <p className="mt-1 text-slate-300 text-xs sm:text-sm">
+                      Recebemos a confirmação do seu Pix via Mercado Pago. Suas cotas foram registradas com sucesso!
+                    </p>
+                  </div>
 
-              {/* QR Code Simulado e Chave Copia e Cola */}
-              <div className="p-4 rounded-2xl bg-white text-black max-w-xs mx-auto shadow-2xl space-y-3">
-                <div className="w-40 h-40 mx-auto bg-slate-100 rounded-xl flex items-center justify-center border border-slate-300 p-2">
-                  <QrCode className="w-36 h-36 text-slate-900" />
+                  {/* Relação das Cotas Garantidas */}
+                  <div className="p-4 rounded-2xl bg-black/50 border border-emerald-500/30 text-left space-y-2">
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block">
+                      Seus Números da Sorte:
+                    </span>
+                    <p className="text-base font-mono font-bold text-[#00FF88] break-words">
+                      {pedidoConcluido.numeros.map((n) => `#${n}`).join(', ')}
+                    </p>
+                    <p className="text-[11px] text-slate-400 pt-1 border-t border-white/5">
+                      Comprovante registrado para <strong className="text-white">{pedidoConcluido.compradorEmail}</strong>
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                    <a
+                      href={`https://wa.me/5531998765432?text=${encodeURIComponent(
+                        `Olá! Sou ${pedidoConcluido.compradorNome} e meu Pix de apoio na rifa Wicked 2026 foi aprovado com sucesso! Meus números são: ${pedidoConcluido.numeros.map((n) => `#${n}`).join(', ')}.`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 py-3 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-lg"
+                    >
+                      <span>Avisar no WhatsApp</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="py-3 px-6 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-semibold transition-colors cursor-pointer"
+                    >
+                      Concluir
+                    </button>
+                  </div>
                 </div>
-                <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                  Escaneie com o app do seu banco
-                </div>
-              </div>
+              ) : (
+                /* TELA DE PAGAMENTO PIX AGUARDANDO CONFIRMAÇÃO */
+                <div className="space-y-4">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[#00FF88] text-xs font-semibold">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Pix Oficial Mercado Pago</span>
+                  </div>
 
-              {/* Código Pix Copia e Cola */}
-              <div className="p-3 rounded-xl bg-black/40 border border-white/10 text-left space-y-1.5">
-                <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block">
-                  Pix Copia e Cola:
-                </span>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={pedidoConcluido.codigoPix}
-                    className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-300 select-all"
-                  />
+                  <div>
+                    <h3 className="font-cinzel text-xl sm:text-2xl font-bold text-white tracking-tight">
+                      Efetue o Pagamento Pix
+                    </h3>
+                    <p className="mt-1 text-slate-300 text-xs sm:text-sm">
+                      Valor total: <strong className="text-[#00FF88]">R$ {pedidoConcluido.valorTotal.toFixed(2).replace('.', ',')}</strong>
+                    </p>
+                  </div>
+
+                  {/* QR Code Oficial em Base64 ou Fallback */}
+                  <div className="p-4 rounded-2xl bg-white text-black max-w-xs mx-auto shadow-2xl space-y-2">
+                    <div className="w-44 h-44 mx-auto bg-white rounded-xl flex items-center justify-center p-1">
+                      {pedidoConcluido.qrCodeBase64 ? (
+                        <img 
+                          src={`data:image/png;base64,${pedidoConcluido.qrCodeBase64}`}
+                          alt="QR Code Pix Mercado Pago"
+                          className="w-40 h-40 object-contain rounded-lg"
+                        />
+                      ) : (
+                        <QrCode className="w-36 h-36 text-slate-900" />
+                      )}
+                    </div>
+                    <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                      Escaneie com o aplicativo do seu banco
+                    </div>
+                  </div>
+
+                  {/* Código Pix Copia e Cola */}
+                  <div className="p-3 rounded-xl bg-black/40 border border-white/10 text-left space-y-1.5">
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold block">
+                      Pix Copia e Cola:
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={pedidoConcluido.codigoPix}
+                        className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-300 select-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={copiarPix}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer ${
+                          pixCopiado ? 'bg-emerald-400 text-black' : 'bg-[#00FF88] text-black hover:bg-[#33ff9f]'
+                        }`}
+                      >
+                        {pixCopiado ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{pixCopiado ? 'Copiado!' : 'Copiar'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Indicador de Espera Realtime */}
+                  <div className="flex items-center justify-center gap-2 text-xs text-slate-400 py-1">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#00FF88]" />
+                    <span>Aguardando confirmação bancária em tempo real...</span>
+                  </div>
+
+                  {/* Botão de Verificação Manual */}
+                  <div className="flex items-center justify-center gap-4 text-xs pt-1">
+                    <button
+                      type="button"
+                      onClick={verificarStatusManual}
+                      disabled={verificandoManual}
+                      className="text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer text-[11px]"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${verificandoManual ? 'animate-spin text-[#00FF88]' : ''}`} />
+                      <span>{verificandoManual ? 'Consultando...' : 'Já paguei, verificar agora'}</span>
+                    </button>
+                  </div>
+
                   <button
                     type="button"
-                    onClick={copiarPix}
-                    className="px-3 py-1.5 rounded-lg bg-[#00FF88] text-black text-xs font-bold hover:bg-[#33ff9f] flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                    onClick={onClose}
+                    className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 text-xs font-medium transition-colors cursor-pointer"
                   >
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>{pixCopiado ? 'Copiado!' : 'Copiar'}</span>
+                    Fechar e pagar depois
                   </button>
                 </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-semibold transition-colors cursor-pointer"
-              >
-                Concluir e Fechar
-              </button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

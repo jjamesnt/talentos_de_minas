@@ -16,7 +16,7 @@ interface CampanhaContextData {
   selecionarCotasEmLote: (numeros: number[]) => void;
   limparSelecao: () => void;
   setBailarinoSelecionadoId: (id: string | null) => void;
-  concluirPedido: (dados: { nome: string; email: string; whatsapp: string; bailarinoId: string }) => PedidoCheckout;
+  concluirPedido: (dados: { nome: string; email: string; whatsapp: string; bailarinoId: string; cotasCustom?: number[] }) => Promise<PedidoCheckout>;
   adicionarBailarino: (dados: { nome: string; fotoUrl: string; meta: number }) => Promise<void>;
   editarBailarino: (id: string, dados: Partial<Bailarino>) => Promise<void>;
   baixaManualCota: (numero: number, dados: { compradorNome: string; compradorEmail?: string; compradorWhatsapp?: string; bailarinoId: string }) => Promise<void>;
@@ -24,6 +24,8 @@ interface CampanhaContextData {
   precoPorCota: number;
   atualizarPrecoPorCota: (novoPreco: number) => Promise<void>;
   carregarDadosReais: () => Promise<void>;
+  confirmarPedidoManual: (orderId: string) => Promise<void>;
+  cancelarPedido: (orderId: string) => Promise<void>;
 }
 
 const CampanhaContext = createContext<CampanhaContextData | null>(null);
@@ -89,22 +91,48 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
 
-      // 3. Carrega pedidos existentes para marcar cotas pagas/reservadas
+      // 3. Carrega slots atômicos e pedidos para proteger cotas pagas/reservadas
+      const { data: slotsData } = await supabase
+        .from('cota_slots')
+        .select('*');
+
       const { data: oData, error: oError } = await supabase
         .from('raffle_orders')
         .select('*');
 
       const novasCotas = criarCotasVazias();
 
+      // Aplica dados da tabela de proteção atômica
+      if (slotsData) {
+        slotsData.forEach((slot: any) => {
+          const cotaIdx = slot.numero - 1;
+          if (novasCotas[cotaIdx]) {
+            const isReservaAtiva = slot.status === 'reserved' && slot.reserved_until && new Date(slot.reserved_until) > new Date();
+            if (slot.status === 'paid' || isReservaAtiva) {
+              novasCotas[cotaIdx] = {
+                numero: slot.numero,
+                status: slot.status === 'paid' ? 'pago' : 'reservado',
+                compradorNome: slot.comprador_nome,
+                compradorEmail: slot.comprador_email,
+                compradorWhatsapp: slot.comprador_whatsapp,
+                bailarinoId: slot.bailarino_id,
+                dataCompra: slot.paid_at || slot.created_at,
+              };
+            }
+          }
+        });
+      }
+
+      // Garante sincronização com pedidos concluídos
       if (!oError && oData) {
         oData.forEach((order: any) => {
-          if (Array.isArray(order.selected_numbers)) {
+          if (Array.isArray(order.selected_numbers) && order.status === 'paid') {
             order.selected_numbers.forEach((num: number) => {
               const cotaIdx = num - 1;
               if (novasCotas[cotaIdx]) {
                 novasCotas[cotaIdx] = {
                   numero: num,
-                  status: order.status === 'paid' ? 'pago' : 'reservado',
+                  status: 'pago',
                   compradorNome: order.customer_name,
                   compradorEmail: order.customer_email,
                   compradorWhatsapp: order.customer_phone,
@@ -134,6 +162,11 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'raffle_orders' },
+        () => carregarDadosReais()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'cota_slots' },
         () => carregarDadosReais()
       )
       .on(
@@ -211,16 +244,43 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setCotasSelecionadas([]);
   };
 
-  // Conclusão real do pedido com inserção no Supabase
-  const concluirPedido = (dados: { nome: string; email: string; whatsapp: string; bailarinoId: string }): PedidoCheckout => {
+  // Conclusão real do pedido com inserção no Supabase e Edge Function Mercado Pago
+  const concluirPedido = async (dados: { 
+    nome: string; 
+    email: string; 
+    whatsapp: string; 
+    bailarinoId: string;
+    cotasCustom?: number[];
+  }): Promise<PedidoCheckout> => {
     const hoje = new Date().toISOString().split('T')[0];
-    const valorTotal = cotasSelecionadas.length * precoPorCota;
+    const cotasParaSalvar = (dados.cotasCustom && dados.cotasCustom.length > 0)
+      ? dados.cotasCustom
+      : cotasSelecionadas;
+    const valorTotal = cotasParaSalvar.length * precoPorCota;
     const novoOrderId = crypto.randomUUID();
-    const codigoPix = `00020126580014BR.GOV.BCB.PIX0136pix-talentos-${Date.now()}520400005303986540${valorTotal}.005802BR5925Talentos de Minas Ballet6009Belo Horizonte62070503***6304`;
 
-    // Persiste no Supabase em segundo plano
+    let codigoPix = '';
+    let qrCodeBase64: string | undefined = undefined;
+    let mpPaymentId: string | undefined = undefined;
+
     if (isSupabaseConfigured) {
-      supabase
+      // 0. REGRA INQUEBRÁVEL: Reserva atômica no banco de dados com bloqueio de concorrência
+      const { data: reservaRes, error: rpcErr } = await supabase.rpc('reservar_cotas_pedido', {
+        p_order_id: novoOrderId,
+        p_numeros: cotasParaSalvar,
+        p_nome: dados.nome,
+        p_email: dados.email,
+        p_whatsapp: dados.whatsapp,
+        p_bailarino_id: dados.bailarinoId,
+      });
+
+      if (rpcErr || (reservaRes && !reservaRes.success)) {
+        const msg = reservaRes?.message || 'Um ou mais números escolhidos já foram adquiridos por outro apoiador! Por favor, escolha outros números.';
+        throw new Error(msg);
+      }
+
+      // 1. Persiste o pedido com status 'pending'
+      const { error: insertErr } = await supabase
         .from('raffle_orders')
         .insert([
           {
@@ -229,16 +289,49 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             customer_email: dados.email,
             customer_phone: dados.whatsapp,
             bailarino_id: dados.bailarinoId,
-            selected_numbers: [...cotasSelecionadas],
+            selected_numbers: [...cotasParaSalvar],
             total_price: valorTotal,
             status: 'pending',
-            codigo_pix: codigoPix,
+            payment_method: 'pix',
+            payment_origin: 'mercadopago',
           },
-        ])
-        .then(({ error }) => {
-          if (error) console.error('Erro ao registrar pedido no Supabase:', error);
-          else carregarDadosReais();
+        ]);
+
+      if (insertErr) {
+        console.error('Erro ao registrar pedido no Supabase:', insertErr);
+        throw new Error('Falha ao registrar pedido no sistema: ' + insertErr.message);
+      }
+
+      // 2. Invoca a Edge Function oficial do Mercado Pago com idempotência
+      try {
+        const { data: mpData, error: fnErr } = await supabase.functions.invoke('create-mercado-pago-payment', {
+          body: {
+            order_id: novoOrderId,
+            total_price: valorTotal,
+            customer_name: dados.nome,
+            customer_email: dados.email,
+            description: `Talentos de Minas - ${cotasParaSalvar.length} cota(s) rifa Wicked 2026`,
+          },
         });
+
+        if (fnErr) {
+          console.error('Erro ao invocar Edge Function create-mercado-pago-payment:', fnErr);
+          throw new Error('Erro no gateway Mercado Pago: ' + fnErr.message);
+        } else if (mpData?.success) {
+          codigoPix = mpData.qr_code || '';
+          qrCodeBase64 = mpData.qr_code_base64;
+          mpPaymentId = mpData.payment_id ? String(mpData.payment_id) : undefined;
+        } else if (mpData?.error) {
+          throw new Error('Mercado Pago: ' + mpData.error);
+        }
+      } catch (callErr: any) {
+        console.error('Exceção ao gerar Pix no Mercado Pago:', callErr);
+        throw new Error(callErr.message || 'Falha na comunicação com o Mercado Pago.');
+      }
+    }
+
+    if (!codigoPix) {
+      throw new Error('Não foi possível obter o QR Code Pix do Mercado Pago. Por favor, tente novamente.');
     }
 
     const novoPedido: PedidoCheckout = {
@@ -247,11 +340,13 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       compradorEmail: dados.email,
       compradorWhatsapp: dados.whatsapp,
       bailarinoId: dados.bailarinoId,
-      numeros: [...cotasSelecionadas].sort((a, b) => a - b),
+      numeros: [...cotasParaSalvar].sort((a, b) => a - b),
       valorTotal,
       dataCriacao: hoje,
       status: 'pendente',
       codigoPix,
+      qrCodeBase64,
+      mpPaymentId,
     };
 
     // Limpa a seleção após concluir
@@ -333,6 +428,37 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const confirmarPedidoManual = async (orderId: string) => {
+    if (isSupabaseConfigured) {
+      await supabase
+        .from('raffle_orders')
+        .update({
+          status: 'paid',
+          payment_origin: 'manual',
+          status_updated_by: 'admin_painel',
+          status_updated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId);
+      await carregarDadosReais();
+    }
+  };
+
+  const cancelarPedido = async (orderId: string) => {
+    if (isSupabaseConfigured) {
+      await supabase
+        .from('raffle_orders')
+        .update({
+          status: 'cancelled',
+          status_updated_by: 'admin_painel',
+          status_updated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId);
+      await carregarDadosReais();
+    }
+  };
+
   return (
     <CampanhaContext.Provider
       value={{
@@ -355,6 +481,8 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         baixaManualCota,
         liberarCota,
         carregarDadosReais,
+        confirmarPedidoManual,
+        cancelarPedido,
       }}
     >
       {children}

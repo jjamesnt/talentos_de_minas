@@ -69,6 +69,8 @@ export interface PedidoCheckout {
   dataCriacao: string;
   status: 'pago' | 'pendente';
   codigoPix: string;
+  qrCodeBase64?: string;
+  mpPaymentId?: string;
 }
 
 export type CargoUsuario = 'Administrador' | 'Coordenação' | 'Operador' | 'Financeiro';

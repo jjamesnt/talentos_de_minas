@@ -26,3 +26,4 @@ scratch/
 *.njsproj
 *.sln
 *.sw?
+supabase/.temp/

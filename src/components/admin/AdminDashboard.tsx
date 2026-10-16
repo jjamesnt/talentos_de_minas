@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useCampanha } from '../../hooks/useCampanha';
 import { useAdminUsuarios } from '../../hooks/useAdminUsuarios';
 import { useToast } from '../../hooks/useToast';
+import { supabase } from '../../lib/supabase';
 import { AdminBailarinos } from './AdminBailarinos';
 import { AdminRifa } from './AdminRifa';
 import { AdminUsuarios } from './AdminUsuarios';
@@ -19,7 +20,11 @@ import {
   Edit3, 
   Check, 
   X, 
-  Loader2 
+  Loader2,
+  CreditCard,
+  Clock,
+  CheckCircle2,
+  RefreshCw
 } from 'lucide-react';
 
 import logoTalentos from '../../assets/logo_talentos.webp';
@@ -33,6 +38,42 @@ export const AdminDashboard: React.FC<{ onVoltarAoSite: () => void }> = ({ onVol
   const [editandoPreco, setEditandoPreco] = useState(false);
   const [novoPrecoInput, setNovoPrecoInput] = useState(String(precoPorCota));
   const [salvandoPreco, setSalvandoPreco] = useState(false);
+
+  const [pedidosRecentes, setPedidosRecentes] = useState<any[]>([]);
+  const [carregandoPedidos, setCarregandoPedidos] = useState(false);
+
+  const carregarPedidos = useCallback(async () => {
+    try {
+      setCarregandoPedidos(true);
+      const { data, error } = await supabase
+        .from('raffle_orders')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(15);
+      if (!error && data) {
+        setPedidosRecentes(data);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar pedidos no painel:', err);
+    } finally {
+      setCarregandoPedidos(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    carregarPedidos();
+
+    const canal = supabase
+      .channel('admin_realtime_orders')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'raffle_orders' }, () => {
+        carregarPedidos();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canal);
+    };
+  }, [carregarPedidos]);
 
   const cotasDisponiveis = TOTAL_COTAS - totalCotasVendidas;
   const metaTotal = TOTAL_COTAS * precoPorCota;
@@ -307,6 +348,107 @@ export const AdminDashboard: React.FC<{ onVoltarAoSite: () => void }> = ({ onVol
                 <p className="text-xs text-slate-400 italic text-center py-6">
                   Nenhum bailarino cadastrado ainda. Use a aba "Bailarinos" para cadastrar os participantes da campanha.
                 </p>
+              )}
+            </div>
+
+            {/* Monitoramento em Tempo Real de Pedidos Pix */}
+            <div className="p-6 rounded-2xl glass-card border border-white/10 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[#00FF88] flex items-center justify-center">
+                    <CreditCard className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-cinzel text-base font-bold text-white flex items-center gap-2">
+                      <span>Últimas Transações Pix (Mercado Pago)</span>
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-sans font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                        Tempo Real
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Sincronização instantânea com a API do Mercado Pago
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={carregarPedidos}
+                  disabled={carregandoPedidos}
+                  className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer self-start sm:self-auto"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${carregandoPedidos ? 'animate-spin text-[#00FF88]' : ''}`} />
+                  <span>Atualizar</span>
+                </button>
+              </div>
+
+              {pedidosRecentes.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-xs italic border border-dashed border-white/10 rounded-xl">
+                  Nenhuma transação Pix registrada ainda. Assim que você gerar ou pagar um Pix de teste, ele aparecerá aqui instantaneamente!
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-white/10 text-slate-400 uppercase tracking-wider text-[10px]">
+                        <th className="pb-3 font-semibold">Comprador</th>
+                        <th className="pb-3 font-semibold">Cotas</th>
+                        <th className="pb-3 font-semibold">Valor</th>
+                        <th className="pb-3 font-semibold">Mercado Pago ID</th>
+                        <th className="pb-3 font-semibold">Status</th>
+                        <th className="pb-3 font-semibold text-right">Data/Hora</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {pedidosRecentes.map((pedido) => {
+                        const isPago = pedido.status === 'paid';
+                        const dataFormatada = new Date(pedido.created_at).toLocaleString('pt-BR');
+                        return (
+                          <tr key={pedido.id} className="hover:bg-white/[0.02] transition-colors">
+                            <td className="py-3">
+                              <p className="font-semibold text-white">{pedido.customer_name}</p>
+                              <p className="text-[11px] text-slate-400">{pedido.customer_phone || pedido.customer_email}</p>
+                            </td>
+                            <td className="py-3 font-mono text-[#00FF88] font-bold">
+                              {Array.isArray(pedido.selected_numbers)
+                                ? pedido.selected_numbers.map((n: number) => `#${n}`).join(', ')
+                                : '-'}
+                            </td>
+                            <td className="py-3 font-bold text-white">
+                              R$ {Number(pedido.total_price).toLocaleString('pt-BR')},00
+                            </td>
+                            <td className="py-3 text-[11px] text-slate-400 font-mono">
+                              {pedido.mp_payment_id ? (
+                                <span className="text-slate-300 font-mono">
+                                  #{pedido.mp_payment_id}
+                                </span>
+                              ) : (
+                                <span className="text-slate-500">Pendente de ID</span>
+                              )}
+                            </td>
+                            <td className="py-3">
+                              {isPago ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Aprovado</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                                  <Clock className="w-3.5 h-3.5" />
+                                  <span>Pendente</span>
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 text-right text-slate-400 text-[11px]">
+                              {dataFormatada}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>
