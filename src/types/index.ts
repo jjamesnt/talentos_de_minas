@@ -145,13 +145,19 @@ export type CategoriaDespesa =
 export interface DespesaFinanceira {
   id: string;
   titulo: string;
-  descricao?: string;
+  descricao?: string | null;
   categoria: CategoriaDespesa | string;
   valor: number;
   data_despesa: string;
-  comprovante_url?: string;
+  comprovante_url?: string | null;
   criado_por: string;
   created_at: string;
   updated_at?: string;
+}
+
+export interface DespesaExcluidaRecord extends DespesaFinanceira {
+  excluido_em: string;
+  excluido_por: string;
+  motivo_exclusao?: string;
 }
 

@@ -3,9 +3,8 @@ import { supabase } from '../../lib/supabase';
 import { useToast } from '../../hooks/useToast';
 import { useCampanha } from '../../hooks/useCampanha';
 import { Modal } from '../common/Modal';
-import { ConfirmModal } from '../common/ConfirmModal';
 import { otimizarFotoPremio } from '../../utils/imageOptimizer';
-import type { DespesaFinanceira, CategoriaDespesa, PedidoLoja } from '../../types';
+import type { DespesaFinanceira, DespesaExcluidaRecord, CategoriaDespesa, PedidoLoja } from '../../types';
 import {
   DollarSign,
   TrendingUp,
@@ -21,6 +20,7 @@ import {
   X,
   Loader2,
   AlertCircle,
+  AlertTriangle,
   Eye,
   ShoppingBag,
   Ticket,
@@ -29,7 +29,10 @@ import {
   PieChart,
   ListOrdered,
   RefreshCw,
-  UserCheck
+  UserCheck,
+  Ban,
+  RotateCcw,
+  User
 } from 'lucide-react';
 
 interface RaffleOrderRecord {
@@ -69,7 +72,8 @@ interface TransacaoFluxo {
   origem: string;
   responsavel?: string;
   valor: number;
-  comprovante_url?: string;
+  comprovante_url?: string | null;
+  despesaRef?: DespesaFinanceira;
 }
 
 export const AdminFinanceiro: React.FC = () => {
@@ -106,9 +110,26 @@ export const AdminFinanceiro: React.FC = () => {
   const [formComprovanteUrl, setFormComprovanteUrl] = useState('');
   const [comprimindoFoto, setComprimindoFoto] = useState(false);
 
-  // Modal de Exclusão de Despesa
+  // Modal de Exclusão de Despesa com Auditoria
   const [despesaParaExcluir, setDespesaParaExcluir] = useState<DespesaFinanceira | null>(null);
   const [excluindoDespesa, setExcluindoDespesa] = useState(false);
+  const [adminResponsavelExclusao, setAdminResponsavelExclusao] = useState('');
+  const [motivoExclusao, setMotivoExclusao] = useState('');
+
+  // Histórico de Despesas Excluídas (Auditoria Permanente)
+  const [despesasExcluidas, setDespesasExcluidas] = useState<DespesaExcluidaRecord[]>(() => {
+    try {
+      const raw = localStorage.getItem('financeiro_despesas_excluidas');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('financeiro_despesas_excluidas', JSON.stringify(despesasExcluidas));
+    } catch {}
+  }, [despesasExcluidas]);
 
   // Modal de Visualização de Comprovante
   const [comprovanteVisualizar, setComprovanteVisualizar] = useState<{ url: string; titulo: string } | null>(null);
@@ -300,6 +321,7 @@ export const AdminFinanceiro: React.FC = () => {
         responsavel: d.criado_por || 'Admin',
         valor: Number(d.valor) || 0,
         comprovante_url: d.comprovante_url,
+        despesaRef: d,
       });
     });
 
@@ -482,6 +504,10 @@ export const AdminFinanceiro: React.FC = () => {
 
         if (error) throw error;
 
+        setDespesas((prev) =>
+          prev.map((d) => (d.id === despesaEmEdicao.id ? { ...d, ...payload } : d))
+        );
+
         showToast({
           type: 'success',
           title: 'Despesa Atualizada',
@@ -489,11 +515,16 @@ export const AdminFinanceiro: React.FC = () => {
         });
       } else {
         // Inserir
-        const { error } = await supabase
+        const { data: novaInserida, error } = await supabase
           .from('financeiro_despesas')
-          .insert([payload]);
+          .insert([payload])
+          .select();
 
         if (error) throw error;
+
+        if (novaInserida && novaInserida[0]) {
+          setDespesas((prev) => [novaInserida[0] as DespesaFinanceira, ...prev]);
+        }
 
         showToast({
           type: 'success',
@@ -516,7 +547,14 @@ export const AdminFinanceiro: React.FC = () => {
     }
   };
 
-  // Excluir despesa
+  // Abertura do modal de confirmação de exclusão
+  const abrirModalExclusao = (d: DespesaFinanceira) => {
+    setDespesaParaExcluir(d);
+    setAdminResponsavelExclusao(adminNome);
+    setMotivoExclusao('');
+  };
+
+  // Excluir despesa e registrar no histórico de auditoria
   const confirmarExclusaoDespesa = async () => {
     if (!despesaParaExcluir) return;
 
@@ -529,10 +567,21 @@ export const AdminFinanceiro: React.FC = () => {
 
       if (error) throw error;
 
+      // Registrar no histórico de auditoria permanente
+      const registroAuditoria: DespesaExcluidaRecord = {
+        ...despesaParaExcluir,
+        excluido_em: new Date().toISOString(),
+        excluido_por: adminResponsavelExclusao.trim() || adminNome,
+        motivo_exclusao: motivoExclusao.trim() || 'Cancelamento/ajuste financeiro administrativo',
+      };
+
+      setDespesasExcluidas((prev) => [registroAuditoria, ...prev]);
+      setDespesas((prev) => prev.filter((d) => d.id !== despesaParaExcluir.id));
+
       showToast({
         type: 'success',
-        title: 'Despesa Excluída',
-        message: `A despesa "${despesaParaExcluir.titulo}" foi removida com sucesso.`
+        title: 'Despesa Excluída com Sucesso',
+        message: `A despesa "${despesaParaExcluir.titulo}" foi removida do caixa e registrada no histórico de auditoria.`
       });
 
       setDespesaParaExcluir(null);
@@ -547,6 +596,55 @@ export const AdminFinanceiro: React.FC = () => {
     } finally {
       setExcluindoDespesa(false);
     }
+  };
+
+  // Restaurar despesa previamente excluída
+  const handleRestaurarDespesa = async (item: DespesaExcluidaRecord) => {
+    try {
+      const { id, excluido_em, excluido_por, motivo_exclusao, ...dadosOriginais } = item;
+      const payload = {
+        ...dadosOriginais,
+        updated_at: new Date().toISOString()
+      };
+
+      const { data: novaInserida, error } = await supabase
+        .from('financeiro_despesas')
+        .insert([payload])
+        .select();
+
+      if (error) throw error;
+
+      setDespesasExcluidas((prev) => prev.filter((d) => d.id !== item.id));
+
+      if (novaInserida && novaInserida[0]) {
+        setDespesas((prev) => [novaInserida[0] as DespesaFinanceira, ...prev]);
+      }
+
+      showToast({
+        type: 'success',
+        title: 'Despesa Restaurada',
+        message: `A despesa "${item.titulo}" foi restaurada com sucesso e voltou a constar no caixa.`
+      });
+
+      await carregarDadosFinanceiros(true);
+    } catch (err: any) {
+      console.error('Erro ao restaurar despesa:', err);
+      showToast({
+        type: 'error',
+        title: 'Erro na Restauração',
+        message: err.message || 'Não foi possível restaurar a despesa.'
+      });
+    }
+  };
+
+  // Remover registro definitivamente do histórico local de auditoria
+  const handleRemoverRegistroHistorico = (item: DespesaExcluidaRecord) => {
+    setDespesasExcluidas((prev) => prev.filter((d) => d.id !== item.id));
+    showToast({
+      type: 'info',
+      title: 'Registro de Auditoria Removido',
+      message: 'O registro foi removido definitivamente do histórico.'
+    });
   };
 
   // Exportar extrato completo para CSV
@@ -852,6 +950,7 @@ export const AdminFinanceiro: React.FC = () => {
                       <th className="py-3 px-3">Descrição / Detalhes</th>
                       <th className="py-3 px-3">Origem / Responsável</th>
                       <th className="py-3 px-3 text-right">Valor</th>
+                      <th className="py-3 px-3 text-center">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
@@ -924,6 +1023,31 @@ export const AdminFinanceiro: React.FC = () => {
                               R$ {t.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </span>
                           </td>
+
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            {isSaida && t.despesaRef ? (
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  onClick={() => abrirEditarDespesa(t.despesaRef!)}
+                                  className="px-2.5 py-1 rounded-lg bg-[#D4AF37]/10 hover:bg-[#D4AF37]/25 text-[#D4AF37] border border-[#D4AF37]/30 transition-all cursor-pointer font-medium text-[11px] flex items-center gap-1 shadow-sm active:scale-95"
+                                  title="Editar esta despesa"
+                                >
+                                  <Edit3 className="w-3 h-3" />
+                                  <span>Editar</span>
+                                </button>
+                                <button
+                                  onClick={() => abrirModalExclusao(t.despesaRef!)}
+                                  className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 transition-all cursor-pointer font-medium text-[11px] flex items-center gap-1 shadow-sm active:scale-95"
+                                  title="Excluir esta despesa"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>Excluir</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-slate-600 text-xs">—</span>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}
@@ -973,110 +1097,398 @@ export const AdminFinanceiro: React.FC = () => {
             </div>
           </div>
 
-          {/* Tabela de Despesas */}
+          {/* Lista de Despesas (Responsivo: Cards no Mobile, Tabela no Desktop) */}
           <div className="p-5 rounded-2xl glass-card border border-white/10 overflow-hidden">
             {despesasFiltradas.length === 0 ? (
-              <div className="py-12 text-center text-slate-400">
-                <Receipt className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-                <p className="text-sm font-semibold text-white">Nenhuma despesa cadastrada</p>
-                <p className="text-xs mt-1">Utilize o botão acima para lançar a primeira despesa eventual ou avulsa.</p>
+              <div className="py-14 flex flex-col items-center justify-center text-center text-slate-400 max-w-md mx-auto">
+                <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mb-3">
+                  <Receipt className="w-8 h-8 text-rose-400" />
+                </div>
+                <p className="text-base font-bold text-white">Nenhuma despesa cadastrada</p>
+                <p className="text-xs text-slate-400 mt-1 mb-5">
+                  Lance despesas eventuais ou de produção (figurinos, viagens, materiais, taxas) para controle automático do saldo líquido em caixa.
+                </p>
+                <button
+                  onClick={abrirNovaDespesa}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-semibold text-xs transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Lançar Primeira Despesa</span>
+                </button>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-white/10 text-slate-400">
-                      <th className="py-3 px-3">Data</th>
-                      <th className="py-3 px-3">Título & Detalhes</th>
-                      <th className="py-3 px-3">Categoria</th>
-                      <th className="py-3 px-3">Registrado por</th>
-                      <th className="py-3 px-3">Comprovante</th>
-                      <th className="py-3 px-3 text-right">Valor</th>
-                      <th className="py-3 px-3 text-center">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {despesasFiltradas.map((d) => {
-                      const dataFormatada = d.data_despesa
-                        ? new Date(d.data_despesa + 'T12:00:00').toLocaleDateString('pt-BR')
-                        : new Date(d.created_at).toLocaleDateString('pt-BR');
+              <>
+                {/* Visualização em Cards no Mobile */}
+                <div className="block md:hidden space-y-3">
+                  {despesasFiltradas.map((d) => {
+                    const dataFormatada = d.data_despesa
+                      ? new Date(d.data_despesa + 'T12:00:00').toLocaleDateString('pt-BR')
+                      : new Date(d.created_at).toLocaleDateString('pt-BR');
 
-                      const catConfig = CATEGORIAS_DESPESA.find((c) => c.valor === d.categoria) || {
-                        cor: 'bg-slate-500/10 text-slate-400 border-slate-500/30'
-                      };
+                    const catConfig = CATEGORIAS_DESPESA.find((c) => c.valor === d.categoria) || {
+                      cor: 'bg-slate-500/10 text-slate-400 border-slate-500/30'
+                    };
 
-                      return (
-                        <tr key={d.id} className="hover:bg-white/5 transition-colors">
-                          <td className="py-3 px-3 whitespace-nowrap text-slate-300 font-medium">
-                            {dataFormatada}
-                          </td>
-
-                          <td className="py-3 px-3 max-w-sm">
-                            <div className="font-semibold text-white">{d.titulo}</div>
-                            {d.descricao && (
-                              <div className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">
-                                {d.descricao}
-                              </div>
-                            )}
-                          </td>
-
-                          <td className="py-3 px-3 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${catConfig.cor}`}>
+                    return (
+                      <div
+                        key={`card-${d.id}`}
+                        className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-3 hover:border-white/20 transition-all"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${catConfig.cor}`}>
                               {d.categoria}
                             </span>
-                          </td>
+                            <h4 className="font-semibold text-sm text-white mt-1.5">{d.titulo}</h4>
+                          </div>
+                          <span className="font-bold text-base text-rose-400 whitespace-nowrap">
+                            - R$ {Number(d.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
 
-                          <td className="py-3 px-3 whitespace-nowrap text-slate-300">
-                            <div className="flex items-center gap-1.5">
-                              <UserCheck className="w-3 h-3 text-[#00FF88]" />
-                              <span>{d.criado_por || 'Admin'}</span>
-                            </div>
-                          </td>
+                        {d.descricao && (
+                          <p className="text-xs text-slate-400 line-clamp-2">{d.descricao}</p>
+                        )}
 
-                          <td className="py-3 px-3 whitespace-nowrap">
-                            {d.comprovante_url ? (
-                              <button
-                                onClick={() => setComprovanteVisualizar({ url: d.comprovante_url!, titulo: d.titulo })}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-[#00FF88] border border-white/10 text-[11px] transition-all cursor-pointer"
-                              >
-                                <Eye className="w-3 h-3" />
-                                <span>Ver Anexo</span>
-                              </button>
-                            ) : (
-                              <span className="text-slate-500 text-[11px] italic">Sem anexo</span>
-                            )}
-                          </td>
+                        <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                          <span className="font-medium text-slate-300">Data: {dataFormatada}</span>
+                          <div className="flex items-center gap-1">
+                            <UserCheck className="w-3 h-3 text-[#00FF88]" />
+                            <span>{d.criado_por || 'Admin'}</span>
+                          </div>
+                        </div>
 
-                          <td className="py-3 px-3 text-right whitespace-nowrap">
-                            <span className="font-bold text-sm text-rose-400">
-                              - R$ {Number(d.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </span>
-                          </td>
+                        {d.comprovante_url && (
+                          <button
+                            onClick={() => setComprovanteVisualizar({ url: d.comprovante_url!, titulo: d.titulo })}
+                            className="w-full py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[#00FF88] border border-white/10 text-xs font-medium flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Ver Comprovante Anexo</span>
+                          </button>
+                        )}
 
-                          <td className="py-3 px-3 text-center whitespace-nowrap">
-                            <div className="flex items-center justify-center gap-1">
-                              <button
-                                onClick={() => abrirEditarDespesa(d)}
-                                className="p-1.5 rounded-lg bg-white/5 hover:bg-[#D4AF37]/20 text-[#D4AF37] border border-white/10 hover:border-[#D4AF37]/40 transition-all cursor-pointer"
-                                title="Editar Despesa"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => setDespesaParaExcluir(d)}
-                                className="p-1.5 rounded-lg bg-white/5 hover:bg-rose-500/20 text-rose-400 border border-white/10 hover:border-rose-500/40 transition-all cursor-pointer"
-                                title="Excluir Despesa"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                        {/* Botões de Ação no Mobile com Texto e Ícone Bem Claros */}
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/10">
+                          <button
+                            onClick={() => abrirEditarDespesa(d)}
+                            className="py-2 px-3 rounded-lg bg-[#D4AF37]/15 hover:bg-[#D4AF37]/25 text-[#D4AF37] border border-[#D4AF37]/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>Editar</span>
+                          </button>
+                          <button
+                            onClick={() => abrirModalExclusao(d)}
+                            className="py-2 px-3 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Excluir</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Visualização em Tabela no Desktop */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-white/10 text-slate-400">
+                        <th className="py-3 px-3">Data</th>
+                        <th className="py-3 px-3">Título & Detalhes</th>
+                        <th className="py-3 px-3">Categoria</th>
+                        <th className="py-3 px-3">Registrado por</th>
+                        <th className="py-3 px-3">Comprovante</th>
+                        <th className="py-3 px-3 text-right">Valor</th>
+                        <th className="py-3 px-3 text-center">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {despesasFiltradas.map((d) => {
+                        const dataFormatada = d.data_despesa
+                          ? new Date(d.data_despesa + 'T12:00:00').toLocaleDateString('pt-BR')
+                          : new Date(d.created_at).toLocaleDateString('pt-BR');
+
+                        const catConfig = CATEGORIAS_DESPESA.find((c) => c.valor === d.categoria) || {
+                          cor: 'bg-slate-500/10 text-slate-400 border-slate-500/30'
+                        };
+
+                        return (
+                          <tr key={d.id} className="hover:bg-white/5 transition-colors">
+                            <td className="py-3 px-3 whitespace-nowrap text-slate-300 font-medium">
+                              {dataFormatada}
+                            </td>
+
+                            <td className="py-3 px-3 max-w-sm">
+                              <div className="font-semibold text-white">{d.titulo}</div>
+                              {d.descricao && (
+                                <div className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">
+                                  {d.descricao}
+                                </div>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-3 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${catConfig.cor}`}>
+                                {d.categoria}
+                              </span>
+                            </td>
+
+                            <td className="py-3 px-3 whitespace-nowrap text-slate-300">
+                              <div className="flex items-center gap-1.5">
+                                <UserCheck className="w-3 h-3 text-[#00FF88]" />
+                                <span>{d.criado_por || 'Admin'}</span>
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-3 whitespace-nowrap">
+                              {d.comprovante_url ? (
+                                <button
+                                  onClick={() => setComprovanteVisualizar({ url: d.comprovante_url!, titulo: d.titulo })}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-[#00FF88] border border-white/10 text-[11px] transition-all cursor-pointer"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>Ver Anexo</span>
+                                </button>
+                              ) : (
+                                <span className="text-slate-500 text-[11px] italic">Sem anexo</span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-3 text-right whitespace-nowrap">
+                              <span className="font-bold text-sm text-rose-400">
+                                - R$ {Number(d.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </span>
+                            </td>
+
+                            <td className="py-3 px-3 text-center whitespace-nowrap">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => abrirEditarDespesa(d)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-[#D4AF37]/10 hover:bg-[#D4AF37]/25 text-[#D4AF37] border border-[#D4AF37]/30 hover:border-[#D4AF37]/60 transition-all cursor-pointer font-semibold text-xs flex items-center gap-1.5 shadow-sm active:scale-95"
+                                  title="Editar Informações da Despesa"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                  <span>Editar</span>
+                                </button>
+                                <button
+                                  onClick={() => abrirModalExclusao(d)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 hover:border-rose-500/60 transition-all cursor-pointer font-semibold text-xs flex items-center gap-1.5 shadow-sm active:scale-95"
+                                  title="Excluir Lançamento de Despesa"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Excluir</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Relação de Despesas Excluídas & Histórico de Auditoria */}
+          <div className="p-5 sm:p-6 rounded-2xl glass-card border border-rose-500/20 bg-gradient-to-b from-rose-950/10 to-transparent space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                  <Ban className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-cinzel text-base font-bold text-white flex items-center gap-2">
+                    <span>Histórico de Despesas Excluídas & Auditoria</span>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                      {despesasExcluidas.length}
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Registro de auditoria com data/hora, identificação do responsável pela exclusão, motivo e possibilidade de restauração.
+                  </p>
+                </div>
               </div>
+            </div>
+
+            {despesasExcluidas.length === 0 ? (
+              <div className="py-8 text-center text-slate-400 text-xs italic">
+                Nenhuma despesa foi excluída até o momento.
+              </div>
+            ) : (
+              <>
+                {/* Cards Mobile de Excluídas */}
+                <div className="block md:hidden space-y-3">
+                  {despesasExcluidas.map((d) => {
+                    const dataExclusaoFormatada = new Date(d.excluido_em).toLocaleString('pt-BR', {
+                      day: '2-digit', month: '2-digit', year: 'numeric',
+                      hour: '2-digit', minute: '2-digit', second: '2-digit'
+                    });
+                    const dataOriginalFormatada = d.data_despesa
+                      ? new Date(d.data_despesa + 'T12:00:00').toLocaleDateString('pt-BR')
+                      : new Date(d.created_at).toLocaleDateString('pt-BR');
+
+                    return (
+                      <div
+                        key={`excluida-card-${d.id}`}
+                        className="p-4 rounded-xl bg-rose-950/20 border border-rose-500/20 space-y-3"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                              {d.categoria}
+                            </span>
+                            <h5 className="font-semibold text-sm text-white mt-1 line-through opacity-80">{d.titulo}</h5>
+                          </div>
+                          <span className="font-bold text-sm text-rose-400 line-through">
+                            - R$ {Number(d.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+
+                        <div className="space-y-1 text-[11px] text-slate-300 bg-black/30 p-2.5 rounded-lg border border-white/5">
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Excluído em:</span>
+                            <span className="font-mono text-rose-300">{dataExclusaoFormatada}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-400">Excluído por:</span>
+                            <span className="inline-flex items-center gap-1 font-semibold text-white">
+                              <User className="w-3 h-3 text-[#00FF88]" />
+                              {d.excluido_por}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Data original:</span>
+                            <span>{dataOriginalFormatada}</span>
+                          </div>
+                          {d.motivo_exclusao && (
+                            <div className="pt-1 border-t border-white/5 text-slate-400 italic">
+                              Motivo: &quot;{d.motivo_exclusao}&quot;
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleRestaurarDespesa(d)}
+                            className="py-1.5 px-2.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-[#00FF88] border border-emerald-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                            title="Restaurar Despesa para o Caixa"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Restaurar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoverRegistroHistorico(d)}
+                            className="py-1.5 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-rose-300 border border-white/10 text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                            title="Remover apenas o registro de log"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Limpar Log</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Tabela Desktop de Excluídas */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-300">
+                    <thead className="bg-black/40 text-slate-400 uppercase tracking-wider text-[10px] border-b border-white/10">
+                      <tr>
+                        <th className="px-4 py-3 font-semibold">Despesa / Título</th>
+                        <th className="px-4 py-3 font-semibold">Categoria</th>
+                        <th className="px-4 py-3 font-semibold">Valor Removido</th>
+                        <th className="px-4 py-3 font-semibold">Data Original</th>
+                        <th className="px-4 py-3 font-semibold">Data/Hora Exclusão</th>
+                        <th className="px-4 py-3 font-semibold">Excluído Por</th>
+                        <th className="px-4 py-3 font-semibold">Motivo / Justificativa</th>
+                        <th className="px-4 py-3 text-right font-semibold">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {despesasExcluidas.map((d) => {
+                        const dataExclusaoFormatada = new Date(d.excluido_em).toLocaleString('pt-BR', {
+                          day: '2-digit', month: '2-digit', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit', second: '2-digit'
+                        });
+                        const dataOriginalFormatada = d.data_despesa
+                          ? new Date(d.data_despesa + 'T12:00:00').toLocaleDateString('pt-BR')
+                          : new Date(d.created_at).toLocaleDateString('pt-BR');
+
+                        return (
+                          <tr key={d.id} className="hover:bg-rose-500/[0.04] transition-colors">
+                            <td className="px-4 py-3">
+                              <p className="font-semibold text-white line-through opacity-80">{d.titulo}</p>
+                              {d.descricao && (
+                                <p className="text-[11px] text-slate-500 line-clamp-1">{d.descricao}</p>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                                {d.categoria}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 font-bold text-rose-400 whitespace-nowrap line-through">
+                              - R$ {Number(d.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-4 py-3 text-slate-400 text-[11px] whitespace-nowrap">
+                              {dataOriginalFormatada}
+                            </td>
+                            <td className="px-4 py-3 font-mono text-rose-300 text-[11px] whitespace-nowrap">
+                              {dataExclusaoFormatada}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-white/10 text-slate-200 border border-white/15">
+                                <User className="w-3 h-3 text-[#00FF88]" />
+                                <span>{d.excluido_por}</span>
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-slate-400 text-[11px] italic max-w-xs truncate">
+                              {d.motivo_exclusao || 'Ajuste / Cancelamento'}
+                            </td>
+                            <td className="px-4 py-3 text-right whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {d.comprovante_url && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setComprovanteVisualizar({ url: d.comprovante_url!, titulo: d.titulo })}
+                                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[#00FF88] border border-white/10 transition-colors inline-flex items-center cursor-pointer"
+                                    title="Ver Comprovante Anexo"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRestaurarDespesa(d)}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-[#00FF88] border border-emerald-500/30 text-xs font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                                  title="Restaurar Despesa para o Caixa Ativo"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                  <span>Restaurar</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoverRegistroHistorico(d)}
+                                  className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors inline-flex items-center cursor-pointer"
+                                  title="Remover do Histórico Definitivamente"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -1370,17 +1782,103 @@ export const AdminFinanceiro: React.FC = () => {
         </form>
       </Modal>
 
-      {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO */}
-      <ConfirmModal
-        isOpen={!!despesaParaExcluir}
-        onClose={() => setDespesaParaExcluir(null)}
-        onConfirm={confirmarExclusaoDespesa}
-        title="Excluir Lançamento de Despesa"
-        message={`Tem certeza que deseja excluir o lançamento de despesa "${despesaParaExcluir?.titulo}" no valor de R$ ${Number(despesaParaExcluir?.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}? O saldo em caixa será recalculado.`}
-        confirmLabel={excluindoDespesa ? 'Excluindo...' : 'Sim, Excluir Despesa'}
-        cancelLabel="Cancelar"
-        isDestructive={true}
-      />
+      {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DE DESPESA COM AUDITORIA */}
+      {despesaParaExcluir && (
+        <Modal
+          isOpen={!!despesaParaExcluir}
+          onClose={() => !excluindoDespesa && setDespesaParaExcluir(null)}
+          title="Confirmar Exclusão de Despesa"
+          maxWidth="md"
+        >
+          <div className="space-y-4 text-xs">
+            <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-start gap-2.5">
+              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+              <div className="text-rose-200 leading-relaxed">
+                <strong className="text-white block font-semibold mb-0.5">Atenção: Remoção do Saldo em Caixa</strong>
+                Ao confirmar, o valor desta despesa deixará de ser abatido do caixa e o registro será arquivado no <strong className="text-white">Histórico de Exclusões</strong> abaixo com registro de auditoria.
+              </div>
+            </div>
+
+            {/* Resumo da Despesa */}
+            <div className="p-4 rounded-xl bg-black/40 border border-white/10 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400">Identificação / Título:</span>
+                <span className="font-bold text-white text-sm">{despesaParaExcluir.titulo}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400">Categoria:</span>
+                <span className="font-medium text-slate-200">{despesaParaExcluir.categoria}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400">Valor a Ser Estornado:</span>
+                <span className="font-bold text-rose-400 text-sm">
+                  - R$ {Number(despesaParaExcluir.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400">Data de Ocorrência:</span>
+                <span className="text-slate-300">
+                  {despesaParaExcluir.data_despesa
+                    ? new Date(despesaParaExcluir.data_despesa + 'T12:00:00').toLocaleDateString('pt-BR')
+                    : new Date(despesaParaExcluir.created_at).toLocaleDateString('pt-BR')}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400">Lançado Originalmente Por:</span>
+                <span className="text-slate-300">{despesaParaExcluir.criado_por || 'Admin'}</span>
+              </div>
+            </div>
+
+            {/* Identificação de quem está excluindo */}
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                Nome do Usuário Responsável pela Exclusão: <span className="text-rose-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={adminResponsavelExclusao}
+                onChange={(e) => setAdminResponsavelExclusao(e.target.value)}
+                placeholder="Ex: Administrador"
+                className="w-full px-3 py-2 rounded-xl bg-black/50 border border-white/15 text-white text-xs focus:outline-none focus:border-rose-400"
+              />
+            </div>
+
+            {/* Motivo da exclusão */}
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                Motivo / Justificativa da Exclusão:
+              </label>
+              <input
+                type="text"
+                value={motivoExclusao}
+                onChange={(e) => setMotivoExclusao(e.target.value)}
+                placeholder="Ex: Lançamento em duplicidade / Cancelado pelo fornecedor / Ajuste contábil"
+                className="w-full px-3 py-2 rounded-xl bg-black/50 border border-white/15 text-white text-xs focus:outline-none focus:border-rose-400"
+              />
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2 border-t border-white/10">
+              <button
+                type="button"
+                disabled={excluindoDespesa}
+                onClick={() => setDespesaParaExcluir(null)}
+                className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-medium transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={excluindoDespesa}
+                onClick={confirmarExclusaoDespesa}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-all shadow-lg shadow-rose-600/30 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {excluindoDespesa ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                <span>{excluindoDespesa ? 'Excluindo...' : 'Confirmar Exclusão'}</span>
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* MODAL DE VISUALIZAÇÃO DE COMPROVANTE */}
       {comprovanteVisualizar && (
