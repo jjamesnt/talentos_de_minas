@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Ticket, Lock, Menu, X } from 'lucide-react';
+import { Ticket, Lock, Menu, X, Share2 } from 'lucide-react';
 import logoTalentos from '../../assets/logo_talentos.webp';
 
 export const Navbar: React.FC<{
   onAbrirAdmin?: () => void;
   onAbrirApoio?: () => void;
+  onAbrirCompartilhar?: () => void;
 }> = ({
   onAbrirApoio,
+  onAbrirCompartilhar,
 }) => {
   const [menuAberto, setMenuAberto] = useState(false);
 
@@ -58,6 +60,17 @@ export const Navbar: React.FC<{
             <span>Apoiar</span>
           </button>
 
+          {onAbrirCompartilhar && (
+            <button
+              onClick={onAbrirCompartilhar}
+              className="p-2 sm:p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-[#00FF88] border border-white/10 transition-colors cursor-pointer min-w-[40px] min-h-[40px] flex items-center justify-center"
+              title="Compartilhar Rifa de Apoio"
+              aria-label="Compartilhar Rifa"
+            >
+              <Share2 className="w-4 h-4 text-[#00FF88]" />
+            </button>
+          )}
+
           <a
             href="/admin"
             target="_blank"
@@ -83,6 +96,18 @@ export const Navbar: React.FC<{
       {/* Dropdown Mobile Suave */}
       {menuAberto && (
         <div className="md:hidden bg-[#0A0A0A]/95 backdrop-blur-2xl border-b border-white/10 px-6 py-4 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2">
+          {onAbrirCompartilhar && (
+            <button
+              onClick={() => {
+                setMenuAberto(false);
+                onAbrirCompartilhar();
+              }}
+              className="text-left text-sm font-medium text-[#00FF88] py-2 flex items-center gap-2 border-b border-white/5 cursor-pointer"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>Compartilhar Rifa</span>
+            </button>
+          )}
           <button
             onClick={() => scrollPara('secao-premios')}
             className="text-left text-sm font-medium text-slate-200 hover:text-[#00FF88] py-2 border-b border-white/5"

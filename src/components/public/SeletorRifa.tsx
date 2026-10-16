@@ -1,13 +1,14 @@
 import React from 'react';
-import { Ticket, Heart, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
+import { Ticket, Heart, ArrowRight, ShieldCheck, Sparkles, Share2 } from 'lucide-react';
 import { useCampanha } from '../../hooks/useCampanha';
 import { TOTAL_COTAS } from '../../constants/campanha';
 
 interface SeletorRifaProps {
   onAbrirApoio: () => void;
+  onAbrirCompartilhar?: () => void;
 }
 
-export const SeletorRifa: React.FC<SeletorRifaProps> = ({ onAbrirApoio }) => {
+export const SeletorRifa: React.FC<SeletorRifaProps> = ({ onAbrirApoio, onAbrirCompartilhar }) => {
   const { totalCotasVendidas, bailarinos, precoPorCota } = useCampanha();
   const cotasRestantes = TOTAL_COTAS - totalCotasVendidas;
 
@@ -56,16 +57,29 @@ export const SeletorRifa: React.FC<SeletorRifaProps> = ({ onAbrirApoio }) => {
             </div>
           </div>
 
-          {/* Botão de Destaque 'Apoiar' */}
-          <button
-            type="button"
-            onClick={onAbrirApoio}
-            className="w-full sm:w-auto px-10 py-4 rounded-2xl font-cinzel text-sm sm:text-base font-black uppercase tracking-wider bg-[#00FF88] hover:bg-[#33ff9f] text-black glow-oz transition-all duration-300 flex items-center justify-center gap-3 active:scale-95 cursor-pointer shadow-2xl shadow-[#00FF88]/30 min-h-[52px]"
-          >
-            <Heart className="w-5 h-5 text-black fill-current" />
-            <span>Apoiar</span>
-            <ArrowRight className="w-4 h-4 text-black stroke-[3]" />
-          </button>
+          {/* Botões de Destaque 'Apoiar' e 'Compartilhar' */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 w-full max-w-md sm:max-w-none">
+            <button
+              type="button"
+              onClick={onAbrirApoio}
+              className="w-full sm:w-auto px-10 py-4 rounded-2xl font-cinzel text-sm sm:text-base font-black uppercase tracking-wider bg-[#00FF88] hover:bg-[#33ff9f] text-black glow-oz transition-all duration-300 flex items-center justify-center gap-3 active:scale-95 cursor-pointer shadow-2xl shadow-[#00FF88]/30 min-h-[52px]"
+            >
+              <Heart className="w-5 h-5 text-black fill-current" />
+              <span>Apoiar</span>
+              <ArrowRight className="w-4 h-4 text-black stroke-[3]" />
+            </button>
+
+            {onAbrirCompartilhar && (
+              <button
+                type="button"
+                onClick={onAbrirCompartilhar}
+                className="w-full sm:w-auto px-7 py-4 rounded-2xl font-cinzel text-sm sm:text-base font-bold text-slate-200 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#00FF88]/40 transition-all duration-300 flex items-center justify-center gap-2.5 active:scale-95 cursor-pointer min-h-[52px]"
+              >
+                <Share2 className="w-4 h-4 text-[#00FF88]" />
+                <span>Compartilhar Rifa</span>
+              </button>
+            )}
+          </div>
 
           {/* Mini Avatares dos Bailarinos */}
           {bailarinos.length > 0 ? (

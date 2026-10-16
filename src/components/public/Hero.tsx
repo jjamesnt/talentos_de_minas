@@ -1,12 +1,13 @@
 import React from 'react';
-import { Sparkles, Ticket, ShoppingBag } from 'lucide-react';
+import { Sparkles, Ticket, ShoppingBag, Share2 } from 'lucide-react';
 import heroBg from '../../assets/hero-wicked-bg.webp';
 
 interface HeroProps {
   onAbrirApoio?: () => void;
+  onAbrirCompartilhar?: () => void;
 }
 
-export const Hero: React.FC<HeroProps> = ({ onAbrirApoio }) => {
+export const Hero: React.FC<HeroProps> = ({ onAbrirApoio, onAbrirCompartilhar }) => {
 
   const scrollPara = (id: string) => {
     const el = document.getElementById(id);
@@ -64,6 +65,16 @@ export const Hero: React.FC<HeroProps> = ({ onAbrirApoio }) => {
             <Ticket className="w-4 h-4 shrink-0" />
             <span>Apoiar</span>
           </button>
+
+          {onAbrirCompartilhar && (
+            <button
+              onClick={onAbrirCompartilhar}
+              className="w-full sm:w-auto px-6 py-3.5 rounded-xl font-cinzel text-sm font-semibold text-white bg-white/5 hover:bg-white/10 backdrop-blur-md border border-[#00FF88]/40 hover:border-[#00FF88] transition-all duration-300 flex items-center justify-center gap-2 active:scale-95 cursor-pointer shadow-lg min-h-[48px]"
+            >
+              <Share2 className="w-4 h-4 text-[#00FF88] shrink-0" />
+              <span>Compartilhar Rifa</span>
+            </button>
+          )}
 
           <button
             onClick={() => scrollPara('secao-loja')}

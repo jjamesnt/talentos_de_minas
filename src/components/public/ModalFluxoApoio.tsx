@@ -17,7 +17,8 @@ import {
   RefreshCw,
   AlertTriangle,
   Clock,
-  Mail
+  Mail,
+  Share2
 } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '../../lib/supabase';
@@ -42,12 +43,14 @@ interface ModalFluxoApoioProps {
   isOpen: boolean;
   onClose: () => void;
   bailarinoPreSelecionadoId?: string | null;
+  onAbrirCompartilharComBailarino?: (bailarinoId?: string) => void;
 }
 
 export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
   isOpen,
   onClose,
   bailarinoPreSelecionadoId,
+  onAbrirCompartilharComBailarino,
 }) => {
   const { 
     bailarinos, 
@@ -92,12 +95,14 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
       if (bailarinoPreSelecionadoId) {
         setBailarinoIdEscolhido(bailarinoPreSelecionadoId);
         setBailarinoSelecionadoId(bailarinoPreSelecionadoId);
+        setEtapa('cotas'); // Acesso direto à seleção de cotas com o bailarino já selecionado!
       } else if (bailarinoSelecionadoId) {
         setBailarinoIdEscolhido(bailarinoSelecionadoId);
+        setEtapa('bailarino');
       } else {
         setBailarinoIdEscolhido(null);
+        setEtapa('bailarino');
       }
-      setEtapa('bailarino');
       setHasSpunOnce(false);
       setNumerosSorteados([]);
       setIndicesFixados([]);
@@ -593,27 +598,56 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
                 </p>
               </div>
 
-              {/* Miniatura do Bailarino Escolhido */}
-              <div className="p-2.5 rounded-xl bg-black/40 border border-white/10 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <img
-                    src={bailarinoAtivo?.fotoUrl}
-                    alt={bailarinoAtivo?.nome}
-                    className="w-9 h-9 rounded-lg object-cover border border-white/10"
-                  />
-                  <div>
-                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Apoiando:</span>
-                    <span className="text-xs font-bold text-white">{bailarinoAtivo?.nome}</span>
+              {/* Card Destaque do Bailarino Apoiado - Foto Maior e Mobile-First */}
+              <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-r from-black/90 via-[#0F3D2A]/35 to-black/90 border border-[#00FF88]/30 shadow-lg flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                  <div className="relative shrink-0">
+                    <img
+                      src={bailarinoAtivo?.fotoUrl}
+                      alt={bailarinoAtivo?.nome}
+                      className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-[#00FF88] shadow-[0_0_15px_rgba(0,255,136,0.25)] ring-1 ring-white/10"
+                    />
+                    <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#00FF88] border-2 border-black flex items-center justify-center text-black shadow-md">
+                      <Sparkles className="w-2.5 h-2.5 stroke-[2.5]" />
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#00FF88]/15 border border-[#00FF88]/30 text-[10px] font-bold text-[#00FF88] uppercase tracking-wider mb-1">
+                      <Heart className="w-2.5 h-2.5 fill-current text-[#FF007F]" />
+                      Você está apoiando
+                    </span>
+                    <h4 className="text-sm sm:text-base font-bold text-white truncate font-cinzel">
+                      {bailarinoAtivo?.nome}
+                    </h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                      {bailarinoAtivo?.id === 'campanha-geral'
+                        ? 'Todos os artistas do Festival Wicked 2026'
+                        : `Festival Wicked 2026 • ${bailarinoAtivo?.totalVendido || 0} cotas vendidas`}
+                    </p>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setEtapa('bailarino')}
-                  className="text-[11px] text-[#00FF88] hover:underline cursor-pointer"
-                >
-                  Trocar
-                </button>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setEtapa('bailarino')}
+                    className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-[#00FF88] border border-[#00FF88]/30 hover:border-[#00FF88] transition-all active:scale-95 cursor-pointer shadow-sm"
+                    title="Escolher outro participante"
+                  >
+                    Trocar
+                  </button>
+                  {onAbrirCompartilharComBailarino && (
+                    <button
+                      type="button"
+                      onClick={() => onAbrirCompartilharComBailarino(bailarinoAtivo?.id)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer flex items-center gap-1 text-[10px]"
+                      title="Compartilhar link de apoio deste bailarino"
+                    >
+                      <Share2 className="w-3.5 h-3.5 text-[#00FF88]" />
+                      <span className="hidden sm:inline text-slate-400 hover:text-white">Divulgar</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Seletor Rápido de Cotas */}

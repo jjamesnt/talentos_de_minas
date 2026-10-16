@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CampanhaProvider } from './hooks/useCampanha';
 import { ToastProvider } from './hooks/useToast';
 import { ToastContainer } from './components/common/ToastContainer';
@@ -12,6 +12,7 @@ import { LojaSazonal } from './components/public/LojaSazonal';
 import { Footer } from './components/public/Footer';
 import { CheckoutModal } from './components/public/CheckoutModal';
 import { ModalFluxoApoio } from './components/public/ModalFluxoApoio';
+import { ModalCompartilharRifa } from './components/public/ModalCompartilharRifa';
 
 // Área Administrativa
 import { AdminAuthModal } from './components/admin/AdminAuthModal';
@@ -41,6 +42,10 @@ export const MainApp: React.FC = () => {
   const [isApoioModalOpen, setIsApoioModalOpen] = useState(false);
   const [bailarinoPreSelecionadoId, setBailarinoPreSelecionadoId] = useState<string | null>(null);
 
+  // Modal de Compartilhamento da Rifa
+  const [isCompartilharModalOpen, setIsCompartilharModalOpen] = useState(false);
+  const [bailarinoParaCompartilharId, setBailarinoParaCompartilharId] = useState<string | null>(null);
+
   const abrirAdmin = () => {
     window.open('/admin', '_blank');
   };
@@ -49,6 +54,24 @@ export const MainApp: React.FC = () => {
     setBailarinoPreSelecionadoId(bailarinoId || null);
     setIsApoioModalOpen(true);
   };
+
+  const abrirCompartilhar = (bailarinoId?: string) => {
+    setBailarinoParaCompartilharId(bailarinoId || null);
+    setIsCompartilharModalOpen(true);
+  };
+
+  // Detecta parâmetro de compartilhamento na URL (?apoiar=ID ou ?bailarino=ID)
+  // Abre diretamente o modal de apoio na etapa de cotas com o bailarino selecionado!
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const bailarinoParam = params.get('apoiar') || params.get('bailarino') || params.get('b');
+      if (bailarinoParam) {
+        setBailarinoPreSelecionadoId(bailarinoParam);
+        setIsApoioModalOpen(true);
+      }
+    }
+  }, []);
 
   const handleAutenticado = () => {
     sessionStorage.setItem('talentos_admin_authenticated', 'true');
@@ -140,12 +163,19 @@ export const MainApp: React.FC = () => {
           <Navbar
             onAbrirAdmin={abrirAdmin}
             onAbrirApoio={() => abrirApoio()}
+            onAbrirCompartilhar={() => abrirCompartilhar()}
           />
 
           <main className="flex-1 pt-18">
-            <Hero onAbrirApoio={() => abrirApoio()} />
+            <Hero 
+              onAbrirApoio={() => abrirApoio()} 
+              onAbrirCompartilhar={() => abrirCompartilhar()}
+            />
             <VitrinePremios />
-            <SeletorRifa onAbrirApoio={() => abrirApoio()} />
+            <SeletorRifa 
+              onAbrirApoio={() => abrirApoio()} 
+              onAbrirCompartilhar={() => abrirCompartilhar()}
+            />
             <LojaSazonal />
           </main>
 
@@ -153,8 +183,18 @@ export const MainApp: React.FC = () => {
 
           <ModalFluxoApoio
             isOpen={isApoioModalOpen}
-            onClose={() => setIsApoioModalOpen(false)}
+            onClose={() => {
+              setIsApoioModalOpen(false);
+              setBailarinoPreSelecionadoId(null);
+            }}
             bailarinoPreSelecionadoId={bailarinoPreSelecionadoId}
+            onAbrirCompartilharComBailarino={(id) => abrirCompartilhar(id)}
+          />
+
+          <ModalCompartilharRifa
+            isOpen={isCompartilharModalOpen}
+            onClose={() => setIsCompartilharModalOpen(false)}
+            bailarinoInicialId={bailarinoParaCompartilharId}
           />
 
           <CheckoutModal
