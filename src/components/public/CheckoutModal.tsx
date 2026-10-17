@@ -20,6 +20,7 @@ import {
   RotateCw,
   Mail
 } from 'lucide-react';
+import { gerarLinkSuporteWhatsApp } from '../../utils/whatsappSupport';
 import type { PedidoCheckout } from '../../types';
 
 const checkoutSchema = z.object({
@@ -545,11 +546,7 @@ export const CheckoutModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
 
               <div className="flex flex-col sm:flex-row gap-2.5">
                 <a
-                  href={`https://wa.me/5531998765432?text=${encodeURIComponent(
-                    `Olá! Sou ${pedidoConcluido.compradorNome} e gerei o pedido de ${pedidoConcluido.numeros
-                      .map((n) => `#${n}`)
-                      .join(', ')} na campanha Wicked 2026.`
-                  )}`}
+                  href={gerarLinkSuporteWhatsApp(pedidoConcluido.compradorNome)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-lg"

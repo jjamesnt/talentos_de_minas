@@ -76,7 +76,7 @@ export const SeletorRifa: React.FC<SeletorRifaProps> = ({ onAbrirApoio, onAbrirC
                 className="w-full sm:w-auto px-7 py-4 rounded-2xl font-cinzel text-sm sm:text-base font-bold text-slate-200 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#00FF88]/40 transition-all duration-300 flex items-center justify-center gap-2.5 active:scale-95 cursor-pointer min-h-[52px]"
               >
                 <Share2 className="w-4 h-4 text-[#00FF88]" />
-                <span>Compartilhar Rifa</span>
+                <span>Compartilhar Campanha</span>
               </button>
             )}
           </div>

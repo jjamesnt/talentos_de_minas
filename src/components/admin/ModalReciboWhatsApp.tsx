@@ -110,7 +110,7 @@ ${pedidoLoja.tamanho ? `• *Tamanho:* ${pedidoLoja.tamanho}\n` : ''}• *Quanti
 • *Data da Compra:* ${dataFormatada}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📍 *RETIRADA EXCLUSIVA NA ESCOLA:*
-Todos os produtos adquiridos na loja oficial devem ser retirados presencialmente na sede do *Talentos de Minas Ballet*.
+Todos os produtos adquiridos na loja oficial devem ser retirados presencialmente no *Núcleo de Dança Tatiana Figueiredo*.
 Quaisquer despesas com deslocamento ou frete são por conta do comprador.
 
 • *Situação:* ${retiradaStatus}

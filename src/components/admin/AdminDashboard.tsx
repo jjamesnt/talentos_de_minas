@@ -83,7 +83,7 @@ export const AdminDashboard: React.FC<{
         customer_contact: p.customer_phone || p.customer_email || '',
         detalhes: Array.isArray(p.selected_numbers) && p.selected_numbers.length > 0
           ? p.selected_numbers.map((n: number) => `#${n}`).join(', ')
-          : 'Cotas da Rifa',
+          : 'Cotas da Campanha',
         valor: Number(p.total_price) || 0,
         mp_payment_id: p.mp_payment_id,
         payment_origin: p.payment_origin,
@@ -531,7 +531,7 @@ export const AdminDashboard: React.FC<{
                       </span>
                     </h3>
                     <p className="text-xs text-slate-400">
-                      Resumo unificado de todos os pagamentos aprovados no site (Rifa Beneficente e Loja Oficial)
+                      Resumo unificado de todos os pagamentos aprovados no site (Campanha de Apoio e Loja Oficial)
                     </p>
                   </div>
                 </div>
@@ -583,7 +583,7 @@ export const AdminDashboard: React.FC<{
                                 <div className="flex items-center gap-1.5">
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-[#00FF88] border border-emerald-500/20 whitespace-nowrap">
                                     <Ticket className="w-3 h-3" />
-                                    <span>Cota Rifa</span>
+                                    <span>Cota Campanha</span>
                                   </span>
                                   <span className="font-mono text-xs text-white font-bold">{pedido.detalhes}</span>
                                 </div>

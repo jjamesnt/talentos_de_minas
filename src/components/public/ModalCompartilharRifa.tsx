@@ -68,9 +68,9 @@ export const ModalCompartilharRifa: React.FC<ModalCompartilharRifaProps> = ({
   const textoWhatsApp = useMemo(() => {
     const primeiroNome = bailarinoEscolhido.nome.split(' ')[0];
     if (bailarinoSelecionadoId === 'campanha-geral') {
-      return `🩰 *Apoie o Ballet Talentos de Minas no Festival Wicked 2026!*\n\nOlá! Estou participando da campanha de arrecadação do espetáculo Wicked 2026. Garanta suas cotas da sorte na rifa oficial e concorra a 5 prêmios incríveis!\n\n👉 *Escolha suas cotas diretamente aqui:*\n${linkGerado}`;
+      return `🩰 *Apoie o Ballet Talentos de Minas no Festival Wicked 2026!*\n\nOlá! Estou participando da campanha de arrecadação do espetáculo Wicked 2026. Garanta suas cotas da sorte na campanha oficial e concorra a 5 prêmios incríveis!\n\n👉 *Escolha suas cotas diretamente aqui:*\n${linkGerado}`;
     }
-    return `🩰 *Torcida Oficial para ${bailarinoEscolhido.nome} • Wicked 2026!*\n\nOlá! Estou apoiando a jornada de ${primeiroNome} no Festival Wicked 2026 do Talentos de Minas. Cada cota da rifa ajuda diretamente nos custos e concorre a 5 prêmios incríveis!\n\n👉 *Apoie e escolha suas cotas diretamente aqui:*\n${linkGerado}`;
+    return `🩰 *Torcida Oficial para ${bailarinoEscolhido.nome} • Wicked 2026!*\n\nOlá! Estou apoiando a jornada de ${primeiroNome} no Festival Wicked 2026 do Talentos de Minas. Cada cota da campanha ajuda diretamente nos custos e concorre a 5 prêmios incríveis!\n\n👉 *Apoie e escolha suas cotas diretamente aqui:*\n${linkGerado}`;
   }, [bailarinoEscolhido, bailarinoSelecionadoId, linkGerado]);
 
   const handleCopiarLink = async () => {
@@ -145,7 +145,7 @@ export const ModalCompartilharRifa: React.FC<ModalCompartilharRifaProps> = ({
               </div>
               <div>
                 <h3 className="font-cinzel text-base sm:text-lg font-bold text-white">
-                  Compartilhar Rifa de Apoio
+                  Compartilhar Campanha de Apoio
                 </h3>
                 <p className="text-[11px] text-slate-400">
                   Gere um link direto para a torcida do bailarino

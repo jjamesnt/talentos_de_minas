@@ -1,6 +1,7 @@
 import React from 'react';
-import { Mail, Lock, Heart } from 'lucide-react';
+import { Mail, Lock, Heart, MessageCircle } from 'lucide-react';
 import logoTalentos from '../../assets/logo_talentos.webp';
+import { gerarLinkSuporteWhatsApp, WHATSAPP_SUPORTE_FORMATADO } from '../../utils/whatsappSupport';
 
 export const Footer: React.FC<{ onAbrirAdmin: () => void }> = ({ onAbrirAdmin }) => {
   return (
@@ -24,6 +25,17 @@ export const Footer: React.FC<{ onAbrirAdmin: () => void }> = ({ onAbrirAdmin })
 
         {/* Canais de Contato Oficiais */}
         <div className="flex flex-col sm:flex-row items-center gap-4">
+          <a
+            href={gerarLinkSuporteWhatsApp()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-[#25D366] transition-colors"
+            title="Suporte via WhatsApp"
+          >
+            <MessageCircle className="w-4 h-4 text-[#25D366]" />
+            <span>Suporte: {WHATSAPP_SUPORTE_FORMATADO}</span>
+          </a>
+
           <a
             href="mailto:talentosdeminasballet@gmail.com"
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition-colors"

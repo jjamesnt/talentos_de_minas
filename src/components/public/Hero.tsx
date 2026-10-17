@@ -72,7 +72,7 @@ export const Hero: React.FC<HeroProps> = ({ onAbrirApoio, onAbrirCompartilhar })
               className="w-full sm:w-auto px-6 py-3.5 rounded-xl font-cinzel text-sm font-semibold text-white bg-white/5 hover:bg-white/10 backdrop-blur-md border border-[#00FF88]/40 hover:border-[#00FF88] transition-all duration-300 flex items-center justify-center gap-2 active:scale-95 cursor-pointer shadow-lg min-h-[48px]"
             >
               <Share2 className="w-4 h-4 text-[#00FF88] shrink-0" />
-              <span>Compartilhar Rifa</span>
+              <span>Compartilhar Campanha</span>
             </button>
           )}
 

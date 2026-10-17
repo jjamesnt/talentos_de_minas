@@ -18,7 +18,8 @@ import {
   AlertTriangle,
   Clock,
   Mail,
-  Share2
+  Share2,
+  MessageCircle
 } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '../../lib/supabase';
@@ -26,6 +27,7 @@ import { useCampanha } from '../../hooks/useCampanha';
 import { useToast } from '../../hooks/useToast';
 import { RoletaWicked } from '../sorteio/RoletaWicked';
 import { BilhetesFixaveis } from '../sorteio/BilhetesFixaveis';
+import { gerarLinkSuporteWhatsApp } from '../../utils/whatsappSupport';
 import type { PedidoCheckout } from '../../types';
 
 // 10 Números Oficiais das fatias da Roleta Wicked
@@ -896,6 +898,18 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
                     </>
                   )}
                 </button>
+
+                <div className="pt-1 text-center">
+                  <a
+                    href={gerarLinkSuporteWhatsApp(nome)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-[#00FF88] transition-colors"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 text-[#00FF88]" />
+                    <span>Dúvidas para apoiar? Fale com nosso suporte no WhatsApp</span>
+                  </a>
+                </div>
               </form>
             </motion.div>
           )}
@@ -999,6 +1013,15 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
                       <RotateCw className="w-4 h-4" />
                       <span>Fazer Novo Pedido</span>
                     </button>
+                    <a
+                      href={gerarLinkSuporteWhatsApp(pedidoConcluido.compradorNome)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Dúvidas com o Pix? Falar no WhatsApp</span>
+                    </a>
                     <button
                       type="button"
                       onClick={onClose}
@@ -1094,13 +1117,25 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
                     </button>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 text-xs font-medium transition-colors cursor-pointer"
-                  >
-                    Fechar e pagar depois
-                  </button>
+                  <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                    <a
+                      href={gerarLinkSuporteWhatsApp(pedidoConcluido.compradorNome)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 py-2.5 px-4 rounded-xl text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Suporte WhatsApp</span>
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 text-xs font-medium transition-colors cursor-pointer"
+                    >
+                      Fechar e pagar depois
+                    </button>
+                  </div>
                 </div>
               )}
             </motion.div>

@@ -17,6 +17,7 @@ import { ModalCompartilharRifa } from './components/public/ModalCompartilharRifa
 // Área Administrativa
 import { AdminAuthModal } from './components/admin/AdminAuthModal';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { FloatingWhatsAppSupport } from './components/common/FloatingWhatsAppSupport';
 
 export const MainApp: React.FC = () => {
   const isDirectAdmin = typeof window !== 'undefined' && (
@@ -180,6 +181,8 @@ export const MainApp: React.FC = () => {
           </main>
 
           <Footer onAbrirAdmin={abrirAdmin} />
+
+          <FloatingWhatsAppSupport />
 
           <ModalFluxoApoio
             isOpen={isApoioModalOpen}

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ShoppingBag, QrCode, Building2 } from 'lucide-react';
+import { ShoppingBag, QrCode, Building2, MessageCircle } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { CheckoutModalLoja } from './CheckoutModalLoja';
 import type { ProdutoLoja } from '../../types';
+import { gerarLinkSuporteWhatsApp, WHATSAPP_SUPORTE_FORMATADO } from '../../utils/whatsappSupport';
 
 const SVG_CAMISETA = `data:image/svg+xml;utf8,${encodeURIComponent(`
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="300" height="300">
@@ -181,7 +182,19 @@ export const LojaSazonal: React.FC = () => {
             <strong className="text-white block font-semibold text-sm mb-0.5">
               Aviso Importante: Retirada Presencial na Escola
             </strong>
-            Todos os produtos adquiridos na loja online devem ser <strong>retirados presencialmente na recepção da escola Talentos de Minas</strong> após a confirmação do pagamento. Eventuais despesas de frete, envio ou transporte são de inteira responsabilidade do comprador.
+            Todos os produtos adquiridos na loja online devem ser <strong>retirados presencialmente na recepção do Núcleo de Dança Tatiana Figueiredo</strong> após a confirmação do pagamento. Eventuais despesas de frete, envio ou transporte são de inteira responsabilidade do comprador.
+            <div className="mt-2 text-[11px] text-amber-300 flex items-center justify-center sm:justify-start gap-1.5 flex-wrap">
+              <span>Dúvidas sobre produtos ou entrega?</span>
+              <a
+                href={gerarLinkSuporteWhatsApp()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 underline font-semibold hover:text-white text-[#25D366]"
+              >
+                <MessageCircle className="w-3.5 h-3.5 text-[#25D366]" />
+                WhatsApp {WHATSAPP_SUPORTE_FORMATADO}
+              </a>
+            </div>
           </div>
         </div>
 

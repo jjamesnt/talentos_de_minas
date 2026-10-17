@@ -64,8 +64,8 @@ export const Navbar: React.FC<{
             <button
               onClick={onAbrirCompartilhar}
               className="p-2 sm:p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-[#00FF88] border border-white/10 transition-colors cursor-pointer min-w-[40px] min-h-[40px] flex items-center justify-center"
-              title="Compartilhar Rifa de Apoio"
-              aria-label="Compartilhar Rifa"
+              title="Compartilhar Campanha de Apoio"
+              aria-label="Compartilhar Campanha"
             >
               <Share2 className="w-4 h-4 text-[#00FF88]" />
             </button>
@@ -105,7 +105,7 @@ export const Navbar: React.FC<{
               className="text-left text-sm font-medium text-[#00FF88] py-2 flex items-center gap-2 border-b border-white/5 cursor-pointer"
             >
               <Share2 className="w-4 h-4" />
-              <span>Compartilhar Rifa</span>
+              <span>Compartilhar Campanha</span>
             </button>
           )}
           <button

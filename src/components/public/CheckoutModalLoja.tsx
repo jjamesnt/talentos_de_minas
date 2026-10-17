@@ -11,8 +11,10 @@ import {
   Building2, 
   CheckCircle2, 
   Loader2, 
-  QrCode
+  QrCode,
+  MessageCircle
 } from 'lucide-react';
+import { gerarLinkSuporteWhatsApp } from '../../utils/whatsappSupport';
 
 interface CheckoutModalLojaProps {
   isOpen: boolean;
@@ -94,7 +96,7 @@ export const CheckoutModalLoja: React.FC<CheckoutModalLojaProps> = ({
             showToast({
               type: 'success',
               title: 'Pagamento Confirmado!',
-              message: 'Seu pedido da loja foi aprovado. Apresente este comprovante na escola.',
+              message: 'Seu pedido da loja foi aprovado. Apresente este comprovante no Núcleo de Dança Tatiana Figueiredo.',
             });
           }
         }
@@ -254,7 +256,7 @@ export const CheckoutModalLoja: React.FC<CheckoutModalLojaProps> = ({
             <strong className="text-white block font-semibold mb-0.5">
               Retirada Presencial na Escola
             </strong>
-            Todos os produtos adquiridos na loja devem ser <strong>retirados na recepção da escola Talentos de Minas</strong> após confirmação. Eventuais despesas de frete ou deslocamento são por conta exclusiva do comprador.
+            Todos os produtos adquiridos na loja devem ser <strong>retirados na recepção do Núcleo de Dança Tatiana Figueiredo</strong> após confirmação. Eventuais despesas de frete ou deslocamento são por conta exclusiva do comprador.
           </div>
         </div>
 
@@ -371,6 +373,18 @@ export const CheckoutModalLoja: React.FC<CheckoutModalLojaProps> = ({
                 </>
               )}
             </button>
+
+            <div className="text-center pt-1">
+              <a
+                href={gerarLinkSuporteWhatsApp(nome)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-[#00FF88] transition-colors"
+              >
+                <MessageCircle className="w-3.5 h-3.5 text-[#00FF88]" />
+                <span>Dúvidas sobre o produto? Suporte no WhatsApp</span>
+              </a>
+            </div>
           </form>
         )}
 
@@ -421,9 +435,21 @@ export const CheckoutModalLoja: React.FC<CheckoutModalLojaProps> = ({
               </div>
             </div>
 
-            <p className="text-[11px] text-slate-400 leading-relaxed pt-2">
+            <p className="text-[11px] text-slate-400 leading-relaxed pt-1">
               Assim que o pagamento for concluído no seu banco, esta tela atualizará automaticamente.
             </p>
+
+            <div className="pt-1">
+              <a
+                href={gerarLinkSuporteWhatsApp(nome)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <MessageCircle className="w-4 h-4 text-emerald-400" />
+                <span>Precisa de ajuda com o Pix? Suporte WhatsApp</span>
+              </a>
+            </div>
           </div>
         )}
 
@@ -453,7 +479,7 @@ export const CheckoutModalLoja: React.FC<CheckoutModalLojaProps> = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Local de Retirada:</span>
-                <span className="font-semibold text-amber-300">Secretaria Talentos de Minas</span>
+                <span className="font-semibold text-amber-300">Recepção do Núcleo de Dança Tatiana Figueiredo</span>
               </div>
             </div>
 
