@@ -4,9 +4,15 @@ import {
   Ticket, 
   Target, 
   DollarSign, 
+  Sparkles, 
+  Edit2, 
+  Trash2, 
+  Plus, 
+  RotateCcw, 
   TrendingUp, 
   Users, 
   Loader2,
+  Tag,
   Save,
   ArrowRightLeft,
   CheckCircle2,
@@ -15,7 +21,10 @@ import {
 } from 'lucide-react';
 import { useCampanha } from '../../hooks/useCampanha';
 import { useToast } from '../../hooks/useToast';
+import { Modal } from '../common/Modal';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { COMBOS_PADRAO } from '../../constants/campanha';
+import type { ComboPromocional } from '../../types';
 
 export const AdminConfigCampanha: React.FC = () => {
   const { 
@@ -23,6 +32,8 @@ export const AdminConfigCampanha: React.FC = () => {
     sincronizarCotasEMetas,
     precoPorCota, 
     atualizarPrecoPorCota,
+    combosPromocionais, 
+    atualizarCombosPromocionais,
     metaArrecadacaoCustom, 
     atualizarMetaArrecadacao,
     bailarinos,
@@ -53,6 +64,18 @@ export const AdminConfigCampanha: React.FC = () => {
   const [novaMetaCustomInput, setNovaMetaCustomInput] = useState(String(metaArrecadacaoCustom || (totalCotas * precoPorCota)));
   const [salvandoMeta, setSalvandoMeta] = useState(false);
 
+  // Estados do Modal de Criação / Edição de Combos
+  const [modalComboAberto, setModalComboAberto] = useState(false);
+  const [comboEmEdicao, setComboEmEdicao] = useState<ComboPromocional | null>(null);
+  const [comboQtdInput, setComboQtdInput] = useState('3');
+  const [comboPrecoInput, setComboPrecoInput] = useState('80');
+  const [comboBadgeInput, setComboBadgeInput] = useState('');
+  const [comboDestaqueInput, setComboDestaqueInput] = useState(false);
+  const [comboAtivoInput, setComboAtivoInput] = useState(true);
+  const [salvandoCombo, setSalvandoCombo] = useState(false);
+
+  // Confirmação para excluir combo
+  const [comboParaExcluir, setComboParaExcluir] = useState<ComboPromocional | null>(null);
 
   const numTotalAtual = parseInt(totalCotasInput, 10) || totalCotas;
   const numMetaAtual = parseInt(metaIndividualInput, 10) || metaSugeridaPorBailarino;
@@ -205,6 +228,135 @@ export const AdminConfigCampanha: React.FC = () => {
     }
   };
 
+  // 5. Salvar Combo Promocional
+  const handleSalvarCombo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const qtd = parseInt(comboQtdInput, 10);
+    const preco = parseFloat(comboPrecoInput.replace(',', '.'));
+
+    if (isNaN(qtd) || qtd <= 0) {
+      showToast({ type: 'warning', title: 'Quantidade Inválida', message: 'Informe a quantidade de cotas do combo.' });
+      return;
+    }
+    if (isNaN(preco) || preco <= 0) {
+      showToast({ type: 'warning', title: 'Preço Inválido', message: 'Informe o valor total do combo.' });
+      return;
+    }
+
+    try {
+      setSalvandoCombo(true);
+      let novosCombos = [...combosPromocionais];
+
+      if (comboEmEdicao) {
+        novosCombos = novosCombos.map((c) =>
+          c.id === comboEmEdicao.id
+            ? {
+                ...c,
+                quantidade: qtd,
+                precoTotal: preco,
+                badge: comboBadgeInput.trim() || undefined,
+                destaque: comboDestaqueInput,
+                ativo: comboAtivoInput,
+              }
+            : c
+        );
+      } else {
+        const novoCombo: ComboPromocional = {
+          id: `combo-${Date.now()}`,
+          quantidade: qtd,
+          precoTotal: preco,
+          badge: comboBadgeInput.trim() || undefined,
+          destaque: comboDestaqueInput,
+          ativo: comboAtivoInput,
+        };
+        novosCombos.push(novoCombo);
+      }
+
+      novosCombos.sort((a, b) => a.quantidade - b.quantidade);
+      await atualizarCombosPromocionais(novosCombos);
+
+      showToast({
+        type: 'success',
+        title: comboEmEdicao ? 'Combo Atualizado' : 'Novo Combo Criado',
+        message: `O pacote de ${qtd} cotas por R$ ${preco},00 já está ativo para os apoiadores.`,
+      });
+      setModalComboAberto(false);
+      setComboEmEdicao(null);
+    } catch (err: any) {
+      showToast({
+        type: 'error',
+        title: 'Erro ao Salvar Combo',
+        message: err?.message || 'Falha ao salvar o combo promocional.',
+      });
+    } finally {
+      setSalvandoCombo(false);
+    }
+  };
+
+  const handleAbrirCriarCombo = () => {
+    setComboEmEdicao(null);
+    setComboQtdInput('3');
+    setComboPrecoInput(String(3 * precoPorCota - 10));
+    setComboBadgeInput('Mais Popular');
+    setComboDestaqueInput(false);
+    setComboAtivoInput(true);
+    setModalComboAberto(true);
+  };
+
+  const handleAbrirEditarCombo = (combo: ComboPromocional) => {
+    setComboEmEdicao(combo);
+    setComboQtdInput(String(combo.quantidade));
+    setComboPrecoInput(String(combo.precoTotal));
+    setComboBadgeInput(combo.badge || '');
+    setComboDestaqueInput(combo.destaque ?? false);
+    setComboAtivoInput(combo.ativo);
+    setModalComboAberto(true);
+  };
+
+  const handleToggleAtivoCombo = async (combo: ComboPromocional) => {
+    try {
+      const novosCombos = combosPromocionais.map((c) =>
+        c.id === combo.id ? { ...c, ativo: !c.ativo } : c
+      );
+      await atualizarCombosPromocionais(novosCombos);
+      showToast({
+        type: 'info',
+        title: combo.ativo ? 'Combo Desativado' : 'Combo Ativado',
+        message: `O pacote de ${combo.quantidade} cotas foi ${combo.ativo ? 'desativado' : 'ativado'}.`,
+      });
+    } catch (err: any) {
+      showToast({ type: 'error', title: 'Erro', message: err?.message || 'Não foi possível alterar o status do combo.' });
+    }
+  };
+
+  const handleConfirmarExcluirCombo = async () => {
+    if (!comboParaExcluir) return;
+    try {
+      const novosCombos = combosPromocionais.filter((c) => c.id !== comboParaExcluir.id);
+      await atualizarCombosPromocionais(novosCombos);
+      showToast({
+        type: 'success',
+        title: 'Combo Excluído',
+        message: `O pacote de ${comboParaExcluir.quantidade} cotas foi removido.`,
+      });
+      setComboParaExcluir(null);
+    } catch (err: any) {
+      showToast({ type: 'error', title: 'Erro ao Excluir', message: err?.message || 'Falha ao excluir o combo.' });
+    }
+  };
+
+  const handleRestaurarCombosPadrao = async () => {
+    try {
+      await atualizarCombosPromocionais(COMBOS_PADRAO);
+      showToast({
+        type: 'success',
+        title: 'Combos Restaurados',
+        message: 'Os pacotes promocionais padrão foram restabelecidos com sucesso.',
+      });
+    } catch (err: any) {
+      showToast({ type: 'error', title: 'Erro', message: err?.message || 'Falha ao restaurar combos padrão.' });
+    }
+  };
 
   const temAlteracoesPendentes = totalCotasInput !== String(totalCotas) || metaIndividualInput !== String(metaSugeridaPorBailarino);
 
@@ -484,7 +636,7 @@ export const AdminConfigCampanha: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="font-bold text-base text-white">Preço Unitário da Cota</h3>
-                  <p className="text-xs text-slate-400">Valor oficial por cota na campanha</p>
+                  <p className="text-xs text-slate-400">Valor base de 1 bilhete sem combo promocional</p>
                 </div>
               </div>
               <span className="px-2.5 py-1 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/30 text-xs font-mono font-bold text-[#D4AF37]">
@@ -494,7 +646,7 @@ export const AdminConfigCampanha: React.FC = () => {
 
             <div className="p-4 rounded-2xl bg-black/40 border border-white/5 mb-4 space-y-2 text-xs">
               <p className="text-slate-300">
-                O valor unitário alimenta o checkout e todos os cálculos do sistema de forma linear e proporcional (1 cota = R$ {precoPorCota}, 3 cotas = R$ {precoPorCota * 3}, 5 cotas = R$ {precoPorCota * 5}, etc).
+                O valor unitário alimenta o checkout, o seletor público e é usado como base para cálculo de economia dos combos.
               </p>
               <p className="text-slate-400 text-[11px]">
                 Arrecadação potencial total: <strong className="text-white font-mono">R$ {(totalCotas * precoPorCota).toLocaleString('pt-BR')},00</strong>
@@ -608,6 +760,256 @@ export const AdminConfigCampanha: React.FC = () => {
         </div>
       </div>
 
+      {/* BLOCO DOS COMBOS PROMOCIONAIS */}
+      <div className="p-5 sm:p-6 rounded-3xl glass-card border border-white/10">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 pb-4 border-b border-white/10">
+          <div>
+            <h3 className="font-cinzel text-lg font-bold text-white flex items-center gap-2">
+              <Tag className="w-5 h-5 text-[#D4AF37]" />
+              Pacotes Promocionais Ativos na Campanha
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Defina a quantidade de cotas, o valor fechado com desconto e selos atrativos para os compradores.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={handleRestaurarCombosPadrao}
+              className="py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Restaurar pacotes originais (1, 3, 5, 10 cotas)"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Restaurar Padrão</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleAbrirCriarCombo}
+              className="px-4 py-2 rounded-xl bg-[#00FF88] hover:bg-[#33ff9f] text-black font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+            >
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>Novo Pacote</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {combosPromocionais.map((combo) => {
+            const valorLinearOriginal = combo.quantidade * precoPorCota;
+            const economia = Math.max(0, valorLinearOriginal - combo.precoTotal);
+
+            return (
+              <div
+                key={combo.id}
+                className={`p-4 rounded-2xl border transition-all flex flex-col justify-between relative ${
+                  combo.ativo
+                    ? combo.destaque
+                      ? 'bg-[#0F3D2A]/40 border-[#00FF88] shadow-lg shadow-[#00FF88]/10'
+                      : 'bg-black/50 border-white/10 hover:border-white/20'
+                    : 'bg-black/20 border-white/5 opacity-50'
+                }`}
+              >
+                {/* Badge Promocional */}
+                {combo.badge && (
+                  <div className="absolute -top-2.5 right-4 px-2 py-0.5 rounded-full bg-[#D4AF37] text-black text-[10px] font-extrabold uppercase tracking-tight shadow">
+                    {combo.badge}
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs uppercase tracking-wider text-slate-400 font-bold">
+                      Pacote {combo.quantidade === 1 ? 'Individual' : `${combo.quantidade} Cotas`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAtivoCombo(combo)}
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md cursor-pointer transition-all ${
+                        combo.ativo
+                          ? 'bg-[#00FF88]/15 text-[#00FF88] border border-[#00FF88]/30'
+                          : 'bg-white/5 text-slate-400 border border-white/10'
+                      }`}
+                      title={combo.ativo ? 'Clique para desativar' : 'Clique para ativar'}
+                    >
+                      {combo.ativo ? 'Ativo' : 'Pausado'}
+                    </button>
+                  </div>
+
+                  <div className="my-2">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-mono text-2xl font-black text-white">
+                        R$ {combo.precoTotal},00
+                      </span>
+                      {economia > 0 && (
+                        <span className="font-mono text-xs text-slate-400 line-through">
+                          R$ {valorLinearOriginal},00
+                        </span>
+                      )}
+                    </div>
+
+                    {economia > 0 ? (
+                      <p className="text-xs text-[#00FF88] font-semibold mt-1 flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Economia de R$ {economia},00
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-400 mt-1">Preço unitário padrão</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Ações do Combo */}
+                <div className="pt-3 border-t border-white/10 flex items-center justify-between gap-2 mt-3">
+                  <span className="text-[11px] text-slate-400">
+                    R$ {(combo.precoTotal / combo.quantidade).toFixed(1).replace('.', ',')} / cota
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleAbrirEditarCombo(combo)}
+                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                      title="Editar pacote"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    {combosPromocionais.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setComboParaExcluir(combo)}
+                        className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+                        title="Excluir pacote"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* MODAL PARA ADICIONAR / EDITAR COMBO PROMOCIONAL */}
+      <Modal
+        isOpen={modalComboAberto}
+        onClose={() => {
+          setModalComboAberto(false);
+          setComboEmEdicao(null);
+        }}
+        title={comboEmEdicao ? 'Editar Combo Promocional' : 'Novo Combo Promocional de Cotas'}
+        maxWidth="md"
+      >
+        <form onSubmit={handleSalvarCombo} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Quantidade de Cotas *
+              </label>
+              <input
+                type="number"
+                min="1"
+                max={totalCotas}
+                step="1"
+                required
+                value={comboQtdInput}
+                onChange={(e) => setComboQtdInput(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-black/60 border border-white/15 text-white font-mono text-sm focus:outline-none focus:border-[#00FF88]"
+                placeholder="Ex: 5"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Valor Total do Pacote (R$) *
+              </label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                required
+                value={comboPrecoInput}
+                onChange={(e) => setComboPrecoInput(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-black/60 border border-white/15 text-white font-mono text-sm focus:outline-none focus:border-[#00FF88]"
+                placeholder="Ex: 130"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              Selo / Badge Promocional (Opcional)
+            </label>
+            <input
+              type="text"
+              value={comboBadgeInput}
+              onChange={(e) => setComboBadgeInput(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl bg-black/60 border border-white/15 text-white text-xs focus:outline-none focus:border-[#00FF88]"
+              placeholder="Ex: Mais Popular, Super Desconto, Apoiador Master"
+            />
+          </div>
+
+          {/* Cálculo de Economia em Tempo Real */}
+          {parseInt(comboQtdInput, 10) > 0 && parseFloat(comboPrecoInput) > 0 && (
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-xs space-y-1">
+              <div className="flex justify-between text-slate-400">
+                <span>Valor sem desconto:</span>
+                <span className="font-mono">
+                  R$ {(parseInt(comboQtdInput, 10) * precoPorCota).toFixed(2).replace('.', ',')}
+                </span>
+              </div>
+              <div className="flex justify-between text-[#00FF88] font-bold">
+                <span>Economia do apoiador:</span>
+                <span className="font-mono">
+                  R$ {Math.max(0, (parseInt(comboQtdInput, 10) * precoPorCota) - parseFloat(comboPrecoInput)).toFixed(2).replace('.', ',')}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2 pt-1">
+            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={comboDestaqueInput}
+                onChange={(e) => setComboDestaqueInput(e.target.checked)}
+                className="rounded bg-black/60 border-white/20 text-[#00FF88] focus:ring-0"
+              />
+              <span>Destacar este pacote visualmente (Borda dourada / verde esmeralda)</span>
+            </label>
+            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={comboAtivoInput}
+                onChange={(e) => setComboAtivoInput(e.target.checked)}
+                className="rounded bg-black/60 border-white/20 text-[#00FF88] focus:ring-0"
+              />
+              <span>Ativo no checkout público</span>
+            </label>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+            <button
+              type="button"
+              onClick={() => {
+                setModalComboAberto(false);
+                setComboEmEdicao(null);
+              }}
+              className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={salvandoCombo}
+              className="px-5 py-2 rounded-xl bg-[#00FF88] hover:bg-[#33ff9f] text-black text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md"
+            >
+              {salvandoCombo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              <span>{comboEmEdicao ? 'Salvar Alterações' : 'Criar Pacote'}</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
+
       {/* CONFIRMAÇÃO PARA SINCRONIZAR COTAS E METAS */}
       <ConfirmModal
         isOpen={confirmarSincronizacao}
@@ -618,6 +1020,18 @@ export const AdminConfigCampanha: React.FC = () => {
         confirmLabel="Sim, Sincronizar Tudo"
         cancelLabel="Voltar"
         isLoading={salvandoSincronizacao}
+      />
+
+      {/* CONFIRMAÇÃO PARA EXCLUIR COMBO */}
+      <ConfirmModal
+        isOpen={comboParaExcluir !== null}
+        onClose={() => setComboParaExcluir(null)}
+        onConfirm={handleConfirmarExcluirCombo}
+        title="Excluir Pacote Promocional?"
+        message={`Deseja realmente remover o pacote de ${comboParaExcluir?.quantidade} cotas (R$ ${comboParaExcluir?.precoTotal},00)?`}
+        confirmLabel="Excluir Pacote"
+        cancelLabel="Cancelar"
+        isDestructive={true}
       />
     </div>
   );

@@ -75,14 +75,28 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     localStorage.removeItem('talentos_bailarinos');
   }, []);
 
-  // Cálculo estritamente proporcional pelo valor unitário da cota (R$ 30 por cota)
+  // Função para cálculo inteligente de valor total com aplicação de combos promocionais
   const calcularValorCotas = useCallback((quantidade: number) => {
     if (quantidade <= 0) return { valorTotal: 0, economia: 0 };
+
+    // Busca se existe combo ativo cadastrado exatamente para essa quantidade
+    const combo = combosPromocionais.find((c) => c.ativo && c.quantidade === quantidade);
+    if (combo && combo.precoTotal > 0) {
+      const valorOriginal = quantidade * precoPorCota;
+      const economia = Math.max(0, valorOriginal - combo.precoTotal);
+      return {
+        valorTotal: combo.precoTotal,
+        comboAplicado: combo,
+        economia,
+      };
+    }
+
+    // Caso padrão: multiplicação linear pelo preço da cota
     return {
       valorTotal: quantidade * precoPorCota,
       economia: 0,
     };
-  }, [precoPorCota]);
+  }, [combosPromocionais, precoPorCota]);
 
   // Carrega os dados reais do Supabase
   const carregarDadosReais = useCallback(async () => {
