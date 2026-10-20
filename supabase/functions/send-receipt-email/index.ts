@@ -73,6 +73,10 @@ serve(async (req) => {
       ? order.selected_numbers.map((n: number) => `#${n}`).join(', ') 
       : 'Cotas confirmadas'
 
+    const qtdCotas = Array.isArray(order.selected_numbers) ? order.selected_numbers.length : 1
+    const valorRegular = qtdCotas * 30
+    const descontoCombo = Math.max(0, valorRegular - Number(order.total_price || 0))
+
     const valorFormatado = Number(order.total_price || 0).toLocaleString('pt-BR', {
       style: 'currency',
       currency: 'BRL'
@@ -142,6 +146,15 @@ serve(async (req) => {
           <tr>
             <td style="padding: 0 30px 25px 30px;">
               <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #111827; border-radius: 14px; padding: 15px 20px; font-size: 13px;">
+                <tr>
+                  <td style="padding: 6px 0; color: #94a3b8;">Quantidade:</td>
+                  <td style="padding: 6px 0; color: #ffffff; font-weight: 600; text-align: right;">${qtdCotas} cota(s)</td>
+                </tr>
+                ${descontoCombo > 0 ? `
+                <tr>
+                  <td style="padding: 6px 0; color: #94a3b8;">Pacote Promocional:</td>
+                  <td style="padding: 6px 0; color: #00FF88; font-weight: 600; text-align: right;">Economia de R$ ${descontoCombo.toLocaleString('pt-BR')},00</td>
+                </tr>` : ''}
                 <tr>
                   <td style="padding: 6px 0; color: #94a3b8;">Valor Total Pago:</td>
                   <td style="padding: 6px 0; color: #ffffff; font-weight: 700; text-align: right;">${valorFormatado}</td>

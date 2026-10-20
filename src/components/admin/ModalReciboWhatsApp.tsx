@@ -56,6 +56,12 @@ export const ModalReciboWhatsApp: React.FC<ModalReciboWhatsAppProps> = ({
       const isPago = pedidoCota.status === 'paid';
       const statusLabel = isPago ? '✅ PAGO / CONFIRMADO' : '⏳ AGUARDANDO PAGAMENTO';
 
+      const valorCheio = qtdCotas * 30;
+      const desconto = Math.max(0, valorCheio - Number(pedidoCota.total_price || 0));
+      const detalheCombo = desconto > 0
+        ? `• *Pacote Promocional:* Economia de R$ ${desconto},00 aplicada! (Preço cheio: R$ ${valorCheio},00)\n`
+        : '';
+
       const texto = `🎭 *TALENTOS DE MINAS BALLET • WICKED 2026*
 🎟️ *COMPROVANTE OFICIAL DE PARTICIPAÇÃO*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -66,8 +72,8 @@ Olá, *${pedidoCota.customer_name}*! Agradecemos imensamente por apoiar nosso es
 • *Telefone:* ${pedidoCota.customer_phone || 'Não informado'}
 ${pedidoCota.dancer_name ? `• *Bailarino(a) Apoiado(a):* ${pedidoCota.dancer_name}\n` : ''}• *Cotas / Números da Sorte:* ${numerosStr}
 • *Quantidade de Cotas:* ${qtdCotas} cota(s)
-• *Valor Total:* R$ ${Number(pedidoCota.total_price || 0).toLocaleString('pt-BR')},00
-• *Forma de Pagamento:* Pix Instantâneo
+• *Valor Total Pago:* R$ ${Number(pedidoCota.total_price || 0).toLocaleString('pt-BR')},00
+${detalheCombo}• *Forma de Pagamento:* Pix Instantâneo
 • *Status:* ${statusLabel}
 • *Código do Pedido:* #${pedidoCota.id.slice(0, 8).toUpperCase()}
 • *Data da Compra:* ${dataFormatada}

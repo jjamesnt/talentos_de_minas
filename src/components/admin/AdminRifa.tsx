@@ -20,7 +20,8 @@ import {
   Trash2,
   Ban,
   User,
-  AlertOctagon
+  AlertOctagon,
+  Tag
 } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { ConfirmModal } from '../common/ConfirmModal';
@@ -28,7 +29,7 @@ import { ModalReciboWhatsApp } from './ModalReciboWhatsApp';
 import type { CotaRifa } from '../../types';
 
 export const AdminRifa: React.FC = () => {
-  const { cotas, bailarinos, confirmarPedidoManual, totalCotas } = useCampanha();
+  const { cotas, bailarinos, confirmarPedidoManual, totalCotas, precoPorCota } = useCampanha();
   const { showToast } = useToast();
 
   const [pedidos, setPedidos] = useState<any[]>([]);
@@ -605,8 +606,27 @@ export const AdminRifa: React.FC = () => {
                         </td>
 
                         {/* Valor */}
-                        <td className="px-4 py-3.5 font-bold text-white">
-                          R$ {Number(pedido.total_price).toLocaleString('pt-BR')},00
+                        <td className="px-4 py-3.5">
+                          <p className="font-bold text-white text-sm">
+                            R$ {Number(pedido.total_price).toLocaleString('pt-BR')},00
+                          </p>
+                          {(() => {
+                            const qtd = Array.isArray(pedido.selected_numbers) ? pedido.selected_numbers.length : 1;
+                            const valorCheio = qtd * precoPorCota;
+                            const desconto = Math.max(0, valorCheio - Number(pedido.total_price || 0));
+                            if (desconto > 0) {
+                              return (
+                                <span 
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold mt-0.5"
+                                  title={`Valor de tabela: R$ ${valorCheio},00 (${qtd} cotas × R$ ${precoPorCota},00). Desconto de combo promocional: R$ ${desconto},00.`}
+                                >
+                                  <Tag className="w-2.5 h-2.5 text-amber-400" />
+                                  <span>Combo (-R$ {desconto})</span>
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
                         </td>
 
                         {/* Status */}

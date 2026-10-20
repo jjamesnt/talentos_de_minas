@@ -32,7 +32,8 @@ import {
   UserCheck,
   Ban,
   RotateCcw,
-  User
+  User,
+  Tag
 } from 'lucide-react';
 
 interface RaffleOrderRecord {
@@ -72,13 +73,15 @@ interface TransacaoFluxo {
   origem: string;
   responsavel?: string;
   valor: number;
+  descontoCombo?: number;
+  valorCheio?: number;
   comprovante_url?: string | null;
   despesaRef?: DespesaFinanceira;
 }
 
 export const AdminFinanceiro: React.FC = () => {
   const { showToast } = useToast();
-  const { bailarinos } = useCampanha();
+  const { bailarinos, precoPorCota } = useCampanha();
 
   // Estados principais
   const [subAba, setSubAba] = useState<'extrato' | 'despesas' | 'demonstrativo'>('extrato');
@@ -239,10 +242,16 @@ export const AdminFinanceiro: React.FC = () => {
     // 1. Receita das Cotas da Rifa
     const receitaRifa = pedidosRifa.reduce((acc, p) => {
       const qtdCotas = p.selected_numbers?.length || 1;
-      const vlr = p.total_price !== undefined ? Number(p.total_price) : qtdCotas * 25;
+      const vlr = p.total_price !== undefined ? Number(p.total_price) : qtdCotas * precoPorCota;
       return acc + (isNaN(vlr) ? 0 : vlr);
     }, 0);
     const totalCotasPagas = pedidosRifa.reduce((acc, p) => acc + (p.selected_numbers?.length || 1), 0);
+    const descontoTotalCombos = pedidosRifa.reduce((acc, p) => {
+      const qtdCotas = p.selected_numbers?.length || 1;
+      const vlrReal = p.total_price !== undefined ? Number(p.total_price) : qtdCotas * precoPorCota;
+      const vlrCheio = qtdCotas * precoPorCota;
+      return acc + Math.max(0, vlrCheio - vlrReal);
+    }, 0);
 
     // 2. Receita da Loja Oficial
     const receitaLoja = pedidosLoja.reduce((acc, p) => {
@@ -263,13 +272,14 @@ export const AdminFinanceiro: React.FC = () => {
     return {
       receitaRifa,
       totalCotasPagas,
+      descontoTotalCombos,
       receitaLoja,
       totalItensLoja,
       receitaBruta,
       totalDespesas,
       saldoLiquido,
     };
-  }, [pedidosRifa, pedidosLoja, despesas]);
+  }, [pedidosRifa, pedidosLoja, despesas, precoPorCota]);
 
   // Montar Extrato Cronológico Unificado de Entradas e Saídas
   const transacoesFluxo = useMemo(() => {
@@ -278,18 +288,26 @@ export const AdminFinanceiro: React.FC = () => {
     // Entradas: Pedidos da Rifa
     pedidosRifa.forEach((p) => {
       const qtd = p.selected_numbers?.length || 1;
-      const valor = p.total_price !== undefined ? Number(p.total_price) : qtd * 25;
+      const valor = p.total_price !== undefined ? Number(p.total_price) : qtd * precoPorCota;
+      const valorCheio = qtd * precoPorCota;
+      const desconto = Math.max(0, valorCheio - valor);
       const bNome = bailarinos.find((b) => b.id === p.bailarino_id)?.nome || 'Geral';
+      const detalheCombo = desconto > 0 
+        ? ` • Pacote Combo (Preço regular: R$ ${valorCheio},00 | Desconto promocional: R$ ${desconto},00)`
+        : '';
+
       lista.push({
         id: `rifa-${p.id}`,
         tipo: 'entrada_cota',
         data: p.created_at,
         titulo: `Cota Rifa (#${p.id.slice(0, 8)})`,
-        descricao: `${qtd} cota(s) [${(p.selected_numbers || []).slice(0, 5).join(', ')}${(p.selected_numbers || []).length > 5 ? '...' : ''}] - Apoiando: ${bNome}`,
+        descricao: `${qtd} cota(s) [${(p.selected_numbers || []).slice(0, 5).join(', ')}${(p.selected_numbers || []).length > 5 ? '...' : ''}] - Apoiando: ${bNome}${detalheCombo}`,
         categoria: 'Rifa Beneficente',
         origem: p.customer_name || 'Comprador Anônimo',
         responsavel: p.status_updated_by || 'Gateway PIX',
         valor: valor,
+        descontoCombo: desconto,
+        valorCheio: valorCheio,
       });
     });
 
@@ -745,9 +763,16 @@ export const AdminFinanceiro: React.FC = () => {
           <p className="text-xl sm:text-2xl font-bold text-white">
             R$ {totais.receitaRifa.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
-          <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 mt-1.5">
-            <ArrowUpRight className="w-3.5 h-3.5" />
-            <span>{totais.totalCotasPagas} cotas confirmadas</span>
+          <div className="flex items-center justify-between gap-1 text-[11px] mt-1.5">
+            <div className="flex items-center gap-1.5 text-emerald-400">
+              <ArrowUpRight className="w-3.5 h-3.5" />
+              <span>{totais.totalCotasPagas} cotas confirmadas</span>
+            </div>
+            {totais.descontoTotalCombos > 0 && (
+              <span className="text-amber-300 font-mono text-[10px] bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20" title={`Descontos totais concedidos em combos promocionais: R$ ${totais.descontoTotalCombos.toLocaleString('pt-BR')},00`}>
+                -R$ {totais.descontoTotalCombos} combos
+              </span>
+            )}
           </div>
         </div>
 
@@ -1022,6 +1047,17 @@ export const AdminFinanceiro: React.FC = () => {
                               {isSaida ? '- ' : '+ '}
                               R$ {t.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </span>
+                            {t.descontoCombo && t.descontoCombo > 0 ? (
+                              <div className="flex items-center justify-end gap-1 mt-0.5">
+                                <span 
+                                  className="text-[10px] text-amber-300 font-semibold inline-flex items-center gap-1 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded"
+                                  title={`Valor regular: R$ ${t.valorCheio?.toFixed(2)}. Economia concedida no combo: R$ ${t.descontoCombo.toFixed(2)}.`}
+                                >
+                                  <Tag className="w-2.5 h-2.5 text-amber-400" />
+                                  <span>Combo (-R$ {t.descontoCombo})</span>
+                                </span>
+                              </div>
+                            ) : null}
                           </td>
 
                           <td className="py-3 px-3 text-center whitespace-nowrap">
