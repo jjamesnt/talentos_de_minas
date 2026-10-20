@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useCampanha } from '../../hooks/useCampanha';
 import { useToast } from '../../hooks/useToast';
 import { supabase } from '../../lib/supabase';
-import { TOTAL_COTAS } from '../../constants/campanha';
 import { 
   Search, 
   Download, 
@@ -29,7 +28,7 @@ import { ModalReciboWhatsApp } from './ModalReciboWhatsApp';
 import type { CotaRifa } from '../../types';
 
 export const AdminRifa: React.FC = () => {
-  const { cotas, bailarinos, confirmarPedidoManual } = useCampanha();
+  const { cotas, bailarinos, confirmarPedidoManual, totalCotas } = useCampanha();
   const { showToast } = useToast();
 
   const [pedidos, setPedidos] = useState<any[]>([]);
@@ -343,10 +342,10 @@ export const AdminRifa: React.FC = () => {
             <DollarSign className="w-4 h-4 text-[#D4AF37]" />
           </div>
           <p className="text-2xl font-bold text-white">
-            {totalCotasVendidas} <span className="text-xs text-slate-400 font-normal">/ {TOTAL_COTAS}</span>
+            {totalCotasVendidas} <span className="text-xs text-slate-400 font-normal">/ {totalCotas}</span>
           </p>
           <p className="text-[11px] text-[#D4AF37] mt-0.5 font-medium">
-            {TOTAL_COTAS - totalCotasVendidas} cotas ainda livres
+            {Math.max(0, totalCotas - totalCotasVendidas)} cotas ainda livres
           </p>
         </div>
 
@@ -475,10 +474,10 @@ export const AdminRifa: React.FC = () => {
                 ? 'bg-[#D4AF37] text-black font-bold'
                 : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'
             }`}
-            title="Ver mapa completo dos 1.200 números"
+            title={`Ver mapa completo dos ${totalCotas.toLocaleString('pt-BR')} números`}
           >
             {visualizacao === 'mapa' ? <ListFilter className="w-3.5 h-3.5" /> : <Grid className="w-3.5 h-3.5" />}
-            <span>{visualizacao === 'mapa' ? 'Voltar para Pedidos' : 'Mapa 1.200 Números'}</span>
+            <span>{visualizacao === 'mapa' ? 'Voltar para Pedidos' : `Mapa ${totalCotas.toLocaleString('pt-BR')} Números`}</span>
           </button>
         </div>
 
@@ -875,7 +874,7 @@ export const AdminRifa: React.FC = () => {
         <div className="rounded-2xl glass-card border border-white/10 p-5 space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-white/10">
             <div>
-              <h4 className="font-cinzel text-base font-bold text-white">Mapa das 1.200 Cotas</h4>
+              <h4 className="font-cinzel text-base font-bold text-white">Mapa das Cotas ({totalCotas.toLocaleString('pt-BR')})</h4>
               <p className="text-xs text-slate-400">Clique em qualquer número vendido para ver a ficha completa.</p>
             </div>
             <div className="flex items-center gap-3 text-xs">

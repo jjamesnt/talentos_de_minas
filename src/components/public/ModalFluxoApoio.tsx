@@ -30,8 +30,6 @@ import { BilhetesFixaveis } from '../sorteio/BilhetesFixaveis';
 import { gerarLinkSuporteWhatsApp } from '../../utils/whatsappSupport';
 import type { PedidoCheckout } from '../../types';
 
-// 10 Números Oficiais das fatias da Roleta Wicked
-const NUMEROS_ROLETA = [1192, 23, 856, 78, 312, 66, 815, 1044, 12, 407];
 
 const checkoutSchema = z.object({
   nome: z.string().min(3, 'Por favor, informe seu nome completo (mínimo 3 caracteres)'),
@@ -63,6 +61,9 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
     concluirPedido,
     precoPorCota,
     carregarDadosReais,
+    totalCotas,
+    combosPromocionais,
+    calcularValorCotas,
   } = useCampanha();
   const { showToast } = useToast();
 
@@ -250,13 +251,13 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
         id: 'campanha-geral',
         nome: 'Campanha Geral (Talentos de Minas)',
         fotoUrl: '/logo_talentos.webp',
-        meta: 1200,
+        meta: totalCotas,
         totalVendido: 0,
         totalApoios: 0,
         ativo: true,
       }
     : bailarinos.find((b) => b.id === bailarinoIdEscolhido);
-  const valorTotal = quantidadeCotas * precoPorCota;
+  const { valorTotal, comboAplicado, economia } = calcularValorCotas(quantidadeCotas);
 
   // Lista de cotas disponíveis
   const disponiveis = cotas.filter((c) => c.status === 'disponivel').map((c) => c.numero);
@@ -268,8 +269,8 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
     try {
       setIsSpinning(true);
 
+      // Escolhe aleatoriamente uma das 10 fatias visuais da roleta
       const indiceFatiaSorteada = Math.floor(Math.random() * 10);
-      const numeroDaFatia = NUMEROS_ROLETA[indiceFatiaSorteada];
       const voltasCompletas = 6 + Math.floor(Math.random() * 3);
 
       const anguloCentroFatia = (18 + indiceFatiaSorteada * 36) % 360;
@@ -288,24 +289,26 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
         transition: { duration: 4, ease: [0.15, 0, 0.1, 1] },
       });
 
+      // GARANTIA TOTAL: Sorteia números estritamente a partir das cotas DISPONÍVEIS da campanha
       if (!hasSpunOnce) {
-        const piscinaRestante = disponiveis.filter((n) => n !== numeroDaFatia);
-        const aleatoriosExtras = piscinaRestante
-          .sort(() => 0.5 - Math.random())
-          .slice(0, Math.max(0, quantidadeCotas - 1));
-
-        const novosNumeros = [numeroDaFatia, ...aleatoriosExtras].slice(0, quantidadeCotas);
+        const embaralhadas = [...disponiveis].sort(() => 0.5 - Math.random());
+        const novosNumeros = embaralhadas.slice(0, quantidadeCotas);
         setNumerosSorteados(novosNumeros);
         setHasSpunOnce(true);
       } else {
-        const piscina = disponiveis.filter((n) => !numerosSorteados.includes(n));
-        const novosAleatorios = piscina.sort(() => 0.5 - Math.random());
-        let ponteiro = 0;
+        // Mantém as cotas fixadas pelo usuário que continuem disponíveis
+        const fixadasValidas = numerosSorteados.filter(
+          (n, idx) => indicesFixados.includes(idx) && disponiveis.includes(n)
+        );
+        const piscinaRestante = disponiveis
+          .filter((n) => !fixadasValidas.includes(n))
+          .sort(() => 0.5 - Math.random());
 
+        let ponteiro = 0;
         const atualizados = [...numerosSorteados];
         for (let i = 0; i < quantidadeCotas; i++) {
-          if (!indicesFixados.includes(i)) {
-            atualizados[i] = novosAleatorios[ponteiro++] || atualizados[i];
+          if (!indicesFixados.includes(i) || !disponiveis.includes(atualizados[i])) {
+            atualizados[i] = piscinaRestante[ponteiro++] || atualizados[i];
           }
         }
         setNumerosSorteados(atualizados);
@@ -361,12 +364,44 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
 
     setIsGeneratingPix(true);
     try {
+      // 1. Verificação preventiva: garante que nenhuma cota sorteada foi vendida enquanto preenchia
+      const indisponiveis = numerosSorteados.filter((num) => {
+        const c = cotas.find((item) => item.numero === num);
+        return !c || c.status !== 'disponivel';
+      });
+
+      let cotasParaCheckout = [...numerosSorteados];
+
+      if (indisponiveis.length > 0) {
+        await carregarDadosReais();
+        const livresFrescas = cotas
+          .filter((c) => c.status === 'disponivel' && !numerosSorteados.includes(c.numero))
+          .map((c) => c.numero)
+          .sort(() => 0.5 - Math.random());
+
+        cotasParaCheckout = numerosSorteados.map((num) => {
+          if (indisponiveis.includes(num)) {
+            return livresFrescas.shift() || num;
+          }
+          return num;
+        });
+
+        setNumerosSorteados(cotasParaCheckout);
+
+        showToast({
+          type: 'warning',
+          title: 'Cota atualizada!',
+          message: `A cota #${indisponiveis.join(', #')} já havia sido adquirida. Atualizamos automaticamente para novo número da sorte livre!`,
+          duration: 6000,
+        });
+      }
+
       const pedido = await concluirPedido({
         nome,
         email,
         whatsapp,
         bailarinoId: bailarinoIdEscolhido,
-        cotasCustom: numerosSorteados,
+        cotasCustom: cotasParaCheckout,
       });
 
       setPedidoConcluido(pedido);
@@ -380,6 +415,29 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
       });
     } catch (err: any) {
       console.error('Erro ao gerar pedido Pix:', err);
+      const msg = err?.message || '';
+
+      // Se o banco Supabase acusar que a cota foi adquirida por outro apoiador
+      if (msg.includes('outro apoiador') || msg.includes('adquirid') || msg.includes('já foram')) {
+        await carregarDadosReais();
+        const livres = cotas
+          .filter((c) => c.status === 'disponivel')
+          .map((c) => c.numero)
+          .sort(() => 0.5 - Math.random());
+
+        if (livres.length >= quantidadeCotas) {
+          const novos = livres.slice(0, quantidadeCotas);
+          setNumerosSorteados(novos);
+          showToast({
+            type: 'warning',
+            title: 'Cota substituída com sucesso!',
+            message: 'A cota anterior já havia sido adquirida. Sorteamos novo(s) número(s) livre(s) para você. Basta clicar em Gerar Pix novamente!',
+            duration: 8000,
+          });
+          return;
+        }
+      }
+
       showToast({
         type: 'error',
         title: 'Falha ao gerar Pix',
@@ -652,33 +710,72 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
                 </div>
               </div>
 
-              {/* Seletor Rápido de Cotas */}
-              <div className="grid grid-cols-4 gap-2">
-                {[1, 3, 5, 10].map((qtd) => (
-                  <button
-                    key={qtd}
-                    type="button"
-                    onClick={() => {
-                      setQuantidadeCotas(qtd);
-                      setHasSpunOnce(false);
-                      setNumerosSorteados([]);
-                      setIndicesFixados([]);
-                    }}
-                    className={`py-3 px-2 rounded-xl text-xs font-bold text-center transition-all cursor-pointer border ${
-                      quantidadeCotas === qtd
-                        ? 'bg-[#00FF88] text-black border-[#00FF88] shadow-[0_0_12px_rgba(0,255,136,0.5)]'
-                        : 'bg-black/30 border-white/10 hover:border-white/20 text-slate-300'
-                    }`}
-                  >
-                    <div className="text-base font-extrabold">{qtd}</div>
-                    <div className="text-[10px] uppercase font-semibold">{qtd === 1 ? 'Cota' : 'Cotas'}</div>
-                  </button>
-                ))}
+              {/* Seletor Rápido de Cotas com Combos Promocionais */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {combosPromocionais.filter(c => c.ativo).map((combo) => {
+                  const qtd = combo.quantidade;
+                  const isSelected = quantidadeCotas === qtd;
+                  const economiaCombo = Math.max(0, (qtd * precoPorCota) - combo.precoTotal);
+
+                  return (
+                    <button
+                      key={combo.id || qtd}
+                      type="button"
+                      onClick={() => {
+                        setQuantidadeCotas(qtd);
+                        setHasSpunOnce(false);
+                        setNumerosSorteados([]);
+                        setIndicesFixados([]);
+                      }}
+                      className={`relative py-3 px-2 rounded-2xl text-xs font-bold text-center transition-all cursor-pointer border flex flex-col items-center justify-between min-h-[78px] ${
+                        isSelected
+                          ? 'bg-[#00FF88] text-black border-[#00FF88] shadow-[0_0_15px_rgba(0,255,136,0.5)] ring-1 ring-[#00FF88]'
+                          : combo.destaque
+                            ? 'bg-[#0F3D2A]/40 border-[#00FF88]/40 hover:border-[#00FF88] text-slate-200'
+                            : 'bg-black/40 border-white/10 hover:border-white/20 text-slate-300'
+                      }`}
+                    >
+                      {/* Badge do Combo se houver */}
+                      {combo.badge && (
+                        <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-tight whitespace-nowrap shadow-md ${
+                          isSelected
+                            ? 'bg-black text-[#00FF88] border border-black'
+                            : 'bg-[#D4AF37] text-black'
+                        }`}>
+                          {combo.badge}
+                        </span>
+                      )}
+
+                      <div className="w-full flex items-baseline justify-center gap-1 mt-1">
+                        <span className="text-lg font-black">{qtd}</span>
+                        <span className="text-[10px] uppercase font-bold opacity-80">{qtd === 1 ? 'Cota' : 'Cotas'}</span>
+                      </div>
+
+                      <div className="w-full mt-1">
+                        <span className={`font-mono text-xs font-bold block ${
+                          isSelected ? 'text-black' : 'text-[#D4AF37]'
+                        }`}>
+                          R$ {combo.precoTotal},00
+                        </span>
+                        {economiaCombo > 0 && (
+                          <span className={`text-[9px] block font-semibold leading-tight ${
+                            isSelected ? 'text-emerald-950 font-black' : 'text-[#00FF88]'
+                          }`}>
+                            Poupe R$ {economiaCombo}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Stepper Manual Personalizado */}
               <div className="p-3 rounded-2xl bg-black/40 border border-white/10 flex items-center justify-between">
-                <span className="text-xs text-slate-300 font-medium">Outra quantidade:</span>
+                <div>
+                  <span className="text-xs text-slate-300 font-medium block">Outra quantidade:</span>
+                  <span className="text-[10px] text-slate-500">De 1 a {Math.min(100, disponiveis.length || 100)} cotas</span>
+                </div>
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
@@ -692,7 +789,7 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
                   </span>
                   <button
                     type="button"
-                    onClick={() => setQuantidadeCotas((q) => Math.min(50, q + 1))}
+                    onClick={() => setQuantidadeCotas((q) => Math.min(100, q + 1))}
                     className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold flex items-center justify-center cursor-pointer"
                   >
                     +
@@ -700,12 +797,27 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
                 </div>
               </div>
 
-              {/* Valor Total */}
+              {/* Valor Total com Destaque de Economia */}
               <div className="p-3.5 rounded-2xl bg-gradient-to-r from-[#D4AF37]/10 to-[#00FF88]/10 border border-[#D4AF37]/30 flex items-center justify-between">
-                <span className="text-xs uppercase tracking-wider text-slate-300 font-semibold">Valor Total:</span>
-                <span className="font-mono text-xl font-black text-[#D4AF37]">
-                  R$ {valorTotal.toFixed(2).replace('.', ',')}
-                </span>
+                <div>
+                  <span className="text-xs uppercase tracking-wider text-slate-300 font-semibold block">Valor Total:</span>
+                  {economia > 0 && (
+                    <span className="text-[11px] text-[#00FF88] font-bold flex items-center gap-1 mt-0.5">
+                      <Sparkles className="w-3 h-3 text-[#D4AF37]" />
+                      Você economiza R$ {economia},00 no combo!
+                    </span>
+                  )}
+                </div>
+                <div className="text-right">
+                  {economia > 0 && (
+                    <span className="text-xs text-slate-400 line-through font-mono block">
+                      R$ {(quantidadeCotas * precoPorCota).toFixed(2).replace('.', ',')}
+                    </span>
+                  )}
+                  <span className="font-mono text-xl font-black text-[#D4AF37]">
+                    R$ {valorTotal.toFixed(2).replace('.', ',')}
+                  </span>
+                </div>
               </div>
 
               {/* Botão de Avanço para a Roleta */}
@@ -739,6 +851,35 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
                     : `Sorteando ${quantidadeCotas} cotas da sorte para você`}
                 </p>
               </div>
+
+              {/* Indicador de Meta do Bailarino em Tempo Real na Roleta */}
+              {bailarinoAtivo && (
+                <div className="w-full p-2.5 sm:p-3 rounded-2xl bg-black/60 border border-white/10 backdrop-blur-md shadow-md">
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <img
+                        src={bailarinoAtivo.fotoUrl}
+                        alt={bailarinoAtivo.nome}
+                        className="w-6 h-6 rounded-full object-cover border border-[#00FF88] shrink-0"
+                      />
+                      <span className="font-semibold text-white truncate text-[11px] sm:text-xs">
+                        Meta de {bailarinoAtivo.nome.split(' ')[0]}:
+                      </span>
+                    </div>
+                    <span className="font-mono font-bold text-[#D4AF37] text-[11px] sm:text-xs shrink-0">
+                      {bailarinoAtivo.totalVendido || 0} / {bailarinoAtivo.meta || totalCotas} cotas ({Math.min(100, Math.round(((bailarinoAtivo.totalVendido || 0) / (bailarinoAtivo.meta || totalCotas || 1)) * 100))}%)
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 bg-black/80 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-[#00FF88] via-[#D4AF37] to-[#FF007F] rounded-full transition-all duration-500"
+                      style={{
+                        width: `${Math.min(100, Math.round(((bailarinoAtivo.totalVendido || 0) / (bailarinoAtivo.meta || totalCotas || 1)) * 100))}%`
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Componente Roleta Wicked Oficial Concêntrica */}
               <div className="w-full max-w-[280px] sm:max-w-[320px]">
@@ -825,10 +966,24 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
                 </div>
 
                 <div className="flex items-center justify-between text-xs pt-0.5">
-                  <span className="text-slate-400 uppercase tracking-wider font-semibold">Total a Pagar:</span>
-                  <span className="font-mono text-base font-bold text-[#D4AF37]">
-                    R$ {valorTotal.toFixed(2).replace('.', ',')}
-                  </span>
+                  <div>
+                    <span className="text-slate-400 uppercase tracking-wider font-semibold">Total a Pagar:</span>
+                    {economia > 0 && (
+                      <span className="block text-[10px] text-[#00FF88] font-bold">
+                        🎉 Economia de R$ {economia},00 ({comboAplicado?.badge || 'Combo Promocional'})
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    {economia > 0 && (
+                      <span className="block text-[11px] text-slate-500 line-through font-mono">
+                        R$ {(quantidadeCotas * precoPorCota).toFixed(2).replace('.', ',')}
+                      </span>
+                    )}
+                    <span className="font-mono text-base font-bold text-[#D4AF37]">
+                      R$ {valorTotal.toFixed(2).replace('.', ',')}
+                    </span>
+                  </div>
                 </div>
               </div>
 

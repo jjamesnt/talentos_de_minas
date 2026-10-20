@@ -1,7 +1,15 @@
-import type { Premio } from '../types';
+import type { Premio, ComboPromocional } from '../types';
 
-export const PRECO_POR_COTA = 30; // R$ 30,00 por cota da campanha
-export const TOTAL_COTAS = 1200;
+export const PRECO_POR_COTA = 30; // R$ 30,00 por cota da campanha (valor padrão)
+export const TOTAL_COTAS_PADRAO = 1200; // Total padrão de cotas
+export const TOTAL_COTAS = TOTAL_COTAS_PADRAO; // Mantido para compatibilidade retroativa
+
+export const COMBOS_PADRAO: ComboPromocional[] = [
+  { id: 'combo-1', quantidade: 1, precoTotal: 30, ativo: true },
+  { id: 'combo-3', quantidade: 3, precoTotal: 80, badge: 'Mais Escolhido', destaque: false, ativo: true },
+  { id: 'combo-5', quantidade: 5, precoTotal: 130, badge: 'Super Desconto', destaque: true, ativo: true },
+  { id: 'combo-10', quantidade: 10, precoTotal: 250, badge: 'Apoiador Master', destaque: false, ativo: true },
+];
 
 export const PREMIOS_OFICIAIS: Premio[] = [
   {

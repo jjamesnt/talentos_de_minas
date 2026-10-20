@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { Bailarino, CotaRifa, PedidoCheckout, Premio } from '../types';
-import { PRECO_POR_COTA, TOTAL_COTAS, PREMIOS_OFICIAIS } from '../constants/campanha';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import type { Bailarino, CotaRifa, PedidoCheckout, Premio, ComboPromocional } from '../types';
+import { PRECO_POR_COTA, TOTAL_COTAS_PADRAO, COMBOS_PADRAO, PREMIOS_OFICIAIS } from '../constants/campanha';
 import { AVATAR_PADRAO_BAILARINO } from '../utils/imageOptimizer';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
@@ -12,6 +12,15 @@ interface CampanhaContextData {
   bailarinoSelecionadoId: string | null;
   totalArrecadado: number;
   totalCotasVendidas: number;
+  totalCotas: number;
+  maiorNumeroVendido: number;
+  atualizarTotalCotas: (novoTotal: number) => Promise<void>;
+  sincronizarCotasEMetas: (params: { novoTotalCotas: number; novaMetaIndividual: number }) => Promise<void>;
+  combosPromocionais: ComboPromocional[];
+  atualizarCombosPromocionais: (novosCombos: ComboPromocional[]) => Promise<void>;
+  calcularValorCotas: (quantidade: number) => { valorTotal: number; comboAplicado?: ComboPromocional; economia: number };
+  metaArrecadacaoCustom: number | null;
+  atualizarMetaArrecadacao: (novaMeta: number | null) => Promise<void>;
   toggleSelecionarCota: (numero: number) => void;
   selecionarAleatorios: (quantidade: number) => void;
   selecionarCotasEmLote: (numeros: number[]) => void;
@@ -21,7 +30,7 @@ interface CampanhaContextData {
   adicionarBailarino: (dados: { nome: string; fotoUrl: string; meta?: number }) => Promise<void>;
   editarBailarino: (id: string, dados: Partial<Bailarino>) => Promise<void>;
   excluirBailarino: (id: string) => Promise<void>;
-  recalcularMetasBailarinos: () => Promise<void>;
+  recalcularMetasBailarinos: (totalBase?: number) => Promise<void>;
   adicionarPremio: (dados: Omit<Premio, 'id'>) => Promise<void>;
   editarPremio: (id: string, dados: Partial<Premio>) => Promise<void>;
   excluirPremio: (id: string) => Promise<void>;
@@ -37,10 +46,10 @@ interface CampanhaContextData {
 
 const CampanhaContext = createContext<CampanhaContextData | null>(null);
 
-// Inicializa a grade de 1 a 1200 disponível
-function criarCotasVazias(): CotaRifa[] {
+// Inicializa a grade com a quantidade total de cotas configurada
+function criarCotasVazias(total = TOTAL_COTAS_PADRAO): CotaRifa[] {
   const lista: CotaRifa[] = [];
-  for (let i = 1; i <= TOTAL_COTAS; i++) {
+  for (let i = 1; i <= total; i++) {
     lista.push({
       numero: i,
       status: 'disponivel',
@@ -50,18 +59,44 @@ function criarCotasVazias(): CotaRifa[] {
 }
 
 export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [cotas, setCotas] = useState<CotaRifa[]>(() => criarCotasVazias());
+  const [totalCotas, setTotalCotas] = useState<number>(TOTAL_COTAS_PADRAO);
+  const [cotas, setCotas] = useState<CotaRifa[]>(() => criarCotasVazias(TOTAL_COTAS_PADRAO));
   const [bailarinos, setBailarinos] = useState<Bailarino[]>([]);
   const [premios, setPremios] = useState<Premio[]>(PREMIOS_OFICIAIS);
   const [cotasSelecionadas, setCotasSelecionadas] = useState<number[]>([]);
   const [bailarinoSelecionadoId, setBailarinoSelecionadoId] = useState<string | null>(null);
   const [precoPorCota, setPrecoPorCota] = useState<number>(PRECO_POR_COTA);
+  const [combosPromocionais, setCombosPromocionais] = useState<ComboPromocional[]>(COMBOS_PADRAO);
+  const [metaArrecadacaoCustom, setMetaArrecadacaoCustom] = useState<number | null>(null);
 
   // Limpeza de resíduos mockados antigos do LocalStorage
   useEffect(() => {
     localStorage.removeItem('talentos_cotas_1200');
     localStorage.removeItem('talentos_bailarinos');
   }, []);
+
+  // Função para cálculo inteligente de valor total com aplicação de combos promocionais
+  const calcularValorCotas = useCallback((quantidade: number) => {
+    if (quantidade <= 0) return { valorTotal: 0, economia: 0 };
+
+    // Busca se existe combo ativo cadastrado exatamente para essa quantidade
+    const combo = combosPromocionais.find((c) => c.ativo && c.quantidade === quantidade);
+    if (combo && combo.precoTotal > 0) {
+      const valorOriginal = quantidade * precoPorCota;
+      const economia = Math.max(0, valorOriginal - combo.precoTotal);
+      return {
+        valorTotal: combo.precoTotal,
+        comboAplicado: combo,
+        economia,
+      };
+    }
+
+    // Caso padrão: multiplicação linear pelo preço da cota
+    return {
+      valorTotal: quantidade * precoPorCota,
+      economia: 0,
+    };
+  }, [combosPromocionais, precoPorCota]);
 
   // Carrega os dados reais do Supabase
   const carregarDadosReais = useCallback(async () => {
@@ -87,15 +122,46 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setBailarinos(mapeados);
       }
 
-      // 2. Carrega configurações globais da campanha (Preço da Cota, etc.)
+      // 2. Carrega configurações globais da campanha (Preço da Cota, Total de Cotas, Combos, Metas)
       const { data: configData } = await supabase
         .from('campanha_config')
         .select('*');
 
+      let totalCotasAtual = TOTAL_COTAS_PADRAO;
+
       if (configData) {
+        // Preço por cota
         const precoRow = configData.find((c: any) => c.chave === 'preco_por_cota');
         if (precoRow && !isNaN(Number(precoRow.valor)) && Number(precoRow.valor) > 0) {
           setPrecoPorCota(Number(precoRow.valor));
+        }
+
+        // Total de cotas da campanha
+        const totalCotasRow = configData.find((c: any) => c.chave === 'total_cotas');
+        if (totalCotasRow && !isNaN(Number(totalCotasRow.valor)) && Number(totalCotasRow.valor) > 0) {
+          totalCotasAtual = Number(totalCotasRow.valor);
+          setTotalCotas(totalCotasAtual);
+        }
+
+        // Combos promocionais de desconto
+        const combosRow = configData.find((c: any) => c.chave === 'combos_promocionais');
+        if (combosRow && combosRow.valor) {
+          try {
+            const parsedCombos = JSON.parse(combosRow.valor);
+            if (Array.isArray(parsedCombos) && parsedCombos.length > 0) {
+              setCombosPromocionais(parsedCombos);
+            }
+          } catch (e) {
+            console.error('Erro ao fazer parse dos combos promocionais:', e);
+          }
+        }
+
+        // Meta personalizada de arrecadação
+        const metaRow = configData.find((c: any) => c.chave === 'meta_arrecadacao');
+        if (metaRow && !isNaN(Number(metaRow.valor)) && Number(metaRow.valor) > 0) {
+          setMetaArrecadacaoCustom(Number(metaRow.valor));
+        } else {
+          setMetaArrecadacaoCustom(null);
         }
       }
 
@@ -120,7 +186,6 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
 
       // 4. Carrega slots atômicos e pedidos para proteger cotas pagas/reservadas
-      // 0. Auto-expira pedidos pendentes com mais de 20 minutos e libera cotas
       try {
         await supabase.rpc('expirar_pedidos_vencidos');
       } catch (_) {}
@@ -133,51 +198,55 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .from('raffle_orders')
         .select('*');
 
-      const novasCotas = criarCotasVazias();
-
-      // Aplica dados da tabela de proteção atômica
-      if (slotsData) {
-        slotsData.forEach((slot: any) => {
-          const cotaIdx = slot.numero - 1;
-          if (novasCotas[cotaIdx]) {
-            const isReservaAtiva = slot.status === 'reserved' && slot.reserved_until && new Date(slot.reserved_until) > new Date();
-            if (slot.status === 'paid' || isReservaAtiva) {
-              novasCotas[cotaIdx] = {
-                numero: slot.numero,
-                status: slot.status === 'paid' ? 'pago' : 'reservado',
-                compradorNome: slot.comprador_nome,
-                compradorEmail: slot.comprador_email,
-                compradorWhatsapp: slot.comprador_whatsapp,
-                bailarinoId: slot.bailarino_id,
-                dataCompra: slot.paid_at || slot.created_at,
-              };
-            }
-          }
+      // 1. Cria a base com as cotas de 1 até totalCotasAtual (disponíveis para venda)
+      const mapaCotas = new Map<number, CotaRifa>();
+      for (let i = 1; i <= totalCotasAtual; i++) {
+        mapaCotas.set(i, {
+          numero: i,
+          status: 'disponivel',
         });
       }
 
-      // Garante sincronização com pedidos concluídos
-      if (!oError && oData) {
-        oData.forEach((order: any) => {
-          if (Array.isArray(order.selected_numbers) && order.status === 'paid') {
-            order.selected_numbers.forEach((num: number) => {
-              const cotaIdx = num - 1;
-              if (novasCotas[cotaIdx]) {
-                novasCotas[cotaIdx] = {
-                  numero: num,
-                  status: 'pago',
-                  compradorNome: order.customer_name,
-                  compradorEmail: order.customer_email,
-                  compradorWhatsapp: order.customer_phone,
-                  bailarinoId: order.bailarino_id,
-                  dataCompra: order.created_at,
-                };
-              }
+      // 2. Aplica dados da tabela de proteção atômica
+      // REGRA INQUEBRÁVEL: Cotas pagas ou reservadas SEMPRE são mantidas no sistema, mesmo se numero > totalCotasAtual!
+      if (slotsData) {
+        slotsData.forEach((slot: any) => {
+          const isReservaAtiva = slot.status === 'reserved' && slot.reserved_until && new Date(slot.reserved_until) > new Date();
+          if (slot.status === 'paid' || isReservaAtiva) {
+            mapaCotas.set(slot.numero, {
+              numero: slot.numero,
+              status: slot.status === 'paid' ? 'pago' : 'reservado',
+              compradorNome: slot.comprador_nome,
+              compradorEmail: slot.comprador_email,
+              compradorWhatsapp: slot.comprador_whatsapp,
+              bailarinoId: slot.bailarino_id,
+              dataCompra: slot.paid_at || slot.created_at,
             });
           }
         });
       }
 
+      // 3. Garante sincronização com pedidos concluídos
+      if (!oError && oData) {
+        oData.forEach((order: any) => {
+          if (Array.isArray(order.selected_numbers) && order.status === 'paid') {
+            order.selected_numbers.forEach((num: number) => {
+              mapaCotas.set(num, {
+                numero: num,
+                status: 'pago',
+                compradorNome: order.customer_name,
+                compradorEmail: order.customer_email,
+                compradorWhatsapp: order.customer_phone,
+                bailarinoId: order.bailarino_id,
+                dataCompra: order.created_at,
+              });
+            });
+          }
+        });
+      }
+
+      // 4. Converte o mapa ordenado crescentemente
+      const novasCotas = Array.from(mapaCotas.values()).sort((a, b) => a.numero - b.numero);
       setCotas(novasCotas);
     } catch (err) {
       console.error('Erro ao conectar ao Supabase:', err);
@@ -226,6 +295,11 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const totalCotasVendidas = cotas.filter((c) => c.status === 'pago').length;
   const totalArrecadado = totalCotasVendidas * precoPorCota;
+  const maiorNumeroVendido = useMemo(() => {
+    return cotas
+      .filter((c) => c.status === 'pago')
+      .reduce((max, c) => Math.max(max, c.numero), 0);
+  }, [cotas]);
 
   const atualizarPrecoPorCota = async (novoPreco: number) => {
     if (novoPreco <= 0 || isNaN(novoPreco)) {
@@ -247,6 +321,127 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         console.error('Erro ao atualizar preco_por_cota no banco:', error);
         throw error;
       }
+    }
+  };
+
+  const atualizarTotalCotas = async (novoTotal: number) => {
+    if (isNaN(novoTotal) || novoTotal <= 0) {
+      throw new Error('Informe um total de cotas válido e maior que zero.');
+    }
+
+    if (novoTotal < totalCotasVendidas) {
+      throw new Error(`Não é possível reduzir o total para menos de ${totalCotasVendidas} cotas, pois já foram vendidas.`);
+    }
+
+    setTotalCotas(novoTotal);
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase
+        .from('campanha_config')
+        .upsert({
+          chave: 'total_cotas',
+          valor: String(novoTotal),
+          updated_at: new Date().toISOString(),
+        });
+
+      if (error) {
+        console.error('Erro ao atualizar total_cotas no banco:', error);
+        throw error;
+      }
+
+      await recalcularMetasBailarinos(novoTotal);
+      await carregarDadosReais();
+    }
+  };
+
+  const sincronizarCotasEMetas = async ({
+    novoTotalCotas,
+    novaMetaIndividual,
+  }: {
+    novoTotalCotas: number;
+    novaMetaIndividual: number;
+  }) => {
+    if (isNaN(novoTotalCotas) || novoTotalCotas <= 0) {
+      throw new Error('Informe um total de cotas válido e maior que zero.');
+    }
+    if (isNaN(novaMetaIndividual) || novaMetaIndividual <= 0) {
+      throw new Error('Informe uma meta individual válida e maior que zero.');
+    }
+    if (novoTotalCotas < totalCotasVendidas) {
+      throw new Error(`Não é possível reduzir o total para menos de ${totalCotasVendidas} cotas, pois já foram vendidas.`);
+    }
+
+    setTotalCotas(novoTotalCotas);
+
+    if (isSupabaseConfigured) {
+      // 1. Salva total de cotas em campanha_config
+      const { error: configErr } = await supabase
+        .from('campanha_config')
+        .upsert({
+          chave: 'total_cotas',
+          valor: String(novoTotalCotas),
+          updated_at: new Date().toISOString(),
+        });
+
+      if (configErr) {
+        console.error('Erro ao atualizar total_cotas:', configErr);
+        throw configErr;
+      }
+
+      // 2. Atualiza a meta de todos os bailarinos ativos
+      const { data: bData, error: bErr } = await supabase
+        .from('bailarinos')
+        .select('id, ativo');
+
+      if (!bErr && bData) {
+        const ativos = bData.filter((b: any) => b.ativo !== false);
+        const updates = ativos.map((b: any) =>
+          supabase.from('bailarinos').update({ meta: novaMetaIndividual }).eq('id', b.id)
+        );
+        await Promise.all(updates);
+      }
+
+      await carregarDadosReais();
+    }
+  };
+
+  const atualizarCombosPromocionais = async (novosCombos: ComboPromocional[]) => {
+    setCombosPromocionais(novosCombos);
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase
+        .from('campanha_config')
+        .upsert({
+          chave: 'combos_promocionais',
+          valor: JSON.stringify(novosCombos),
+          updated_at: new Date().toISOString(),
+        });
+
+      if (error) {
+        console.error('Erro ao salvar combos promocionais no banco:', error);
+        throw error;
+      }
+      await carregarDadosReais();
+    }
+  };
+
+  const atualizarMetaArrecadacao = async (novaMeta: number | null) => {
+    setMetaArrecadacaoCustom(novaMeta);
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase
+        .from('campanha_config')
+        .upsert({
+          chave: 'meta_arrecadacao',
+          valor: novaMeta !== null ? String(novaMeta) : '',
+          updated_at: new Date().toISOString(),
+        });
+
+      if (error) {
+        console.error('Erro ao salvar meta_arrecadacao no banco:', error);
+        throw error;
+      }
+      await carregarDadosReais();
     }
   };
 
@@ -294,7 +489,9 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const cotasParaSalvar = (dados.cotasCustom && dados.cotasCustom.length > 0)
       ? dados.cotasCustom
       : cotasSelecionadas;
-    const valorTotal = cotasParaSalvar.length * precoPorCota;
+    
+    // Aplica o cálculo inteligente de valores e combos promocionais
+    const { valorTotal } = calcularValorCotas(cotasParaSalvar.length);
     const novoOrderId = crypto.randomUUID();
 
     let codigoPix = '';
@@ -392,8 +589,8 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return novoPedido;
   };
 
-  // Recalcula e redistribui automaticamente a meta entre os bailarinos ativos (1.200 cotas ÷ total ativos)
-  const recalcularMetasBailarinos = async () => {
+  // Recalcula e redistribui automaticamente a meta entre os bailarinos ativos (total de cotas ÷ total ativos)
+  const recalcularMetasBailarinos = async (totalBase?: number) => {
     if (!isSupabaseConfigured) return;
     try {
       const { data: bData, error } = await supabase
@@ -405,7 +602,8 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const ativos = bData.filter((b: any) => b.ativo !== false);
       if (ativos.length === 0) return;
 
-      const novaMeta = Math.round(TOTAL_COTAS / ativos.length);
+      const baseCotas = totalBase || totalCotas || TOTAL_COTAS_PADRAO;
+      const novaMeta = Math.round(baseCotas / ativos.length);
 
       const updates = ativos.map((b: any) =>
         supabase.from('bailarinos').update({ meta: novaMeta }).eq('id', b.id)
@@ -654,6 +852,15 @@ export const CampanhaProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         bailarinoSelecionadoId,
         totalArrecadado,
         totalCotasVendidas,
+        totalCotas,
+        maiorNumeroVendido,
+        atualizarTotalCotas,
+        sincronizarCotasEMetas,
+        combosPromocionais,
+        atualizarCombosPromocionais,
+        calcularValorCotas,
+        metaArrecadacaoCustom,
+        atualizarMetaArrecadacao,
         precoPorCota,
         atualizarPrecoPorCota,
         toggleSelecionarCota,

@@ -7,7 +7,7 @@ import type { Bailarino } from '../../types';
 import { otimizarFotoBailarino, AVATAR_PADRAO_BAILARINO } from '../../utils/imageOptimizer';
 
 export const AdminBailarinos: React.FC = () => {
-  const { bailarinos, adicionarBailarino, editarBailarino, excluirBailarino, recalcularMetasBailarinos } = useCampanha();
+  const { bailarinos, adicionarBailarino, editarBailarino, excluirBailarino, recalcularMetasBailarinos, totalCotas } = useCampanha();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
@@ -20,8 +20,8 @@ export const AdminBailarinos: React.FC = () => {
   const [isRecalculando, setIsRecalculando] = useState(false);
 
   const bailarinosAtivos = bailarinos.filter((b) => b.ativo);
-  const metaCalculadaAtual = bailarinosAtivos.length > 0 ? Math.round(1200 / bailarinosAtivos.length) : 120;
-  const metaSugeridaNovo = Math.round(1200 / (bailarinosAtivos.length + 1));
+  const metaCalculadaAtual = bailarinosAtivos.length > 0 ? Math.round(totalCotas / bailarinosAtivos.length) : Math.round(totalCotas / 10);
+  const metaSugeridaNovo = Math.round(totalCotas / (bailarinosAtivos.length + 1));
 
   const handleRecalcularTodasMetas = async () => {
     try {
@@ -30,7 +30,7 @@ export const AdminBailarinos: React.FC = () => {
       showToast({
         type: 'success',
         title: 'Metas Recalculadas',
-        message: `As 1.200 cotas foram redistribuídas igualmente entre os ${bailarinosAtivos.length} participantes ativos (${metaCalculadaAtual} cotas cada).`,
+        message: `As ${totalCotas.toLocaleString('pt-BR')} cotas foram redistribuídas igualmente entre os ${bailarinosAtivos.length} participantes ativos (${metaCalculadaAtual} cotas cada).`,
       });
     } catch (err: any) {
       console.error('Erro ao recalcular metas:', err);
@@ -313,7 +313,7 @@ export const AdminBailarinos: React.FC = () => {
                 <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
                   {editandoId
                     ? 'Meta atual do participante. Ao salvar, as metas de todos os ativos podem ser sincronizadas.'
-                    : `Sugerido: ${metaSugeridaNovo} cotas (1.200 ÷ ${bailarinosAtivos.length + 1} ativos). As metas de todos serão redistribuídas automaticamente.`}
+                    : `Sugerido: ${metaSugeridaNovo} cotas (${totalCotas.toLocaleString('pt-BR')} ÷ ${bailarinosAtivos.length + 1} ativos). As metas de todos serão redistribuídas automaticamente.`}
                 </p>
               </div>
             </div>

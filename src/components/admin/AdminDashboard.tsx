@@ -9,8 +9,8 @@ import { AdminRifa } from './AdminRifa';
 import { AdminLoja } from './AdminLoja';
 import { AdminFinanceiro } from './AdminFinanceiro';
 import { AdminUsuarios } from './AdminUsuarios';
+import { AdminConfigCampanha } from './AdminConfigCampanha';
 import { ErrorBoundary } from '../common/ErrorBoundary';
-import { TOTAL_COTAS } from '../../constants/campanha';
 import { 
   LayoutDashboard, 
   Users, 
@@ -29,7 +29,8 @@ import {
   CheckCircle2,
   RefreshCw,
   LogOut,
-  Gift
+  Gift,
+  Sliders
 } from 'lucide-react';
 
 import logoTalentos from '../../assets/logo_talentos.webp';
@@ -39,8 +40,18 @@ export const AdminDashboard: React.FC<{
   onVoltarAoSite: () => void;
   onLogout?: () => void;
 }> = ({ onVoltarAoSite, onLogout }) => {
-  const [abaAtiva, setAbaAtiva] = useState<'kpi' | 'bailarinos' | 'premios' | 'rifa' | 'loja' | 'financeiro' | 'usuarios'>('kpi');
-  const { totalArrecadado, totalCotasVendidas, bailarinos, premios, precoPorCota, atualizarPrecoPorCota } = useCampanha();
+  const [abaAtiva, setAbaAtiva] = useState<'kpi' | 'configuracoes' | 'bailarinos' | 'premios' | 'rifa' | 'loja' | 'financeiro' | 'usuarios'>('kpi');
+  const { 
+    totalArrecadado, 
+    totalCotasVendidas, 
+    bailarinos, 
+    premios, 
+    precoPorCota, 
+    atualizarPrecoPorCota,
+    totalCotas,
+    combosPromocionais,
+    metaArrecadacaoCustom
+  } = useCampanha();
   const { usuarios } = useAdminUsuarios();
   const { showToast } = useToast();
 
@@ -138,8 +149,8 @@ export const AdminDashboard: React.FC<{
     };
   }, [carregarPedidos]);
 
-  const cotasDisponiveis = TOTAL_COTAS - totalCotasVendidas;
-  const metaTotal = TOTAL_COTAS * precoPorCota;
+  const cotasDisponiveis = Math.max(0, totalCotas - totalCotasVendidas);
+  const metaTotal = metaArrecadacaoCustom || (totalCotas * precoPorCota);
 
   const handleSalvarPreco = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -284,6 +295,18 @@ export const AdminDashboard: React.FC<{
           </button>
 
           <button
+            onClick={() => setAbaAtiva('configuracoes')}
+            className={`py-2.5 sm:py-3 px-3 sm:px-4 text-xs font-semibold flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              abaAtiva === 'configuracoes'
+                ? 'border-[#00FF88] text-[#00FF88]'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Sliders className="w-4 h-4 shrink-0 text-[#D4AF37]" />
+            Configurações & Metas
+          </button>
+
+          <button
             onClick={() => setAbaAtiva('bailarinos')}
             className={`py-2.5 sm:py-3 px-3 sm:px-4 text-xs font-semibold flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               abaAtiva === 'bailarinos'
@@ -316,7 +339,7 @@ export const AdminDashboard: React.FC<{
             }`}
           >
             <Ticket className="w-4 h-4 shrink-0" />
-            Pedidos & Cotas (1.200)
+            Pedidos & Cotas ({totalCotas})
           </button>
 
           <button
@@ -446,10 +469,10 @@ export const AdminDashboard: React.FC<{
                   <Ticket className="w-4 h-4 text-[#D4AF37]" />
                 </div>
                 <p className="text-2xl font-bold text-white">
-                  {totalCotasVendidas} <span className="text-sm font-normal text-slate-400">/ {TOTAL_COTAS}</span>
+                  {totalCotasVendidas} <span className="text-sm font-normal text-slate-400">/ {totalCotas}</span>
                 </p>
                 <p className="text-[11px] text-emerald-400 mt-1">
-                  {Math.round((totalCotasVendidas / TOTAL_COTAS) * 100)}% da meta atingida
+                  {Math.round((totalCotasVendidas / (totalCotas || 1)) * 100)}% da meta atingida
                 </p>
               </div>
 
@@ -472,6 +495,34 @@ export const AdminDashboard: React.FC<{
                 <p className="text-2xl font-bold text-white">{bailarinos.filter((b) => b.ativo).length}</p>
                 <p className="text-[11px] text-slate-400 mt-1">Participantes ativos no ranking</p>
               </div>
+            </div>
+
+            {/* Atalho Rápido de Gestão de Parâmetros e Combos */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-black/80 via-[#0F3D2A]/30 to-black/80 border border-[#00FF88]/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#00FF88]/15 border border-[#00FF88]/30 text-[#00FF88] flex items-center justify-center shrink-0">
+                  <Sliders className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Parâmetros Ativos da Campanha</span>
+                    <span className="text-[10px] bg-[#00FF88]/20 text-[#00FF88] px-2 py-0.5 rounded-full font-mono">
+                      {combosPromocionais.filter(c => c.ativo).length} Combos Ativos
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {totalCotas.toLocaleString('pt-BR')} cotas • R$ {precoPorCota},00/cota • Meta: R$ {metaTotal.toLocaleString('pt-BR')},00
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAbaAtiva('configuracoes')}
+                className="px-4 py-2.5 rounded-xl bg-[#00FF88] hover:bg-[#33ff9f] text-black font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md shrink-0"
+              >
+                <Sliders className="w-4 h-4 stroke-[2.5]" />
+                <span>Configurar Cotas, Metas & Combos</span>
+              </button>
             </div>
 
             {/* Comparativo de Desempenho dos Bailarinos */}
@@ -636,6 +687,7 @@ export const AdminDashboard: React.FC<{
         )}
 
         <ErrorBoundary fallbackTitle="Erro ao carregar módulo administrativo">
+          {abaAtiva === 'configuracoes' && <AdminConfigCampanha />}
           {abaAtiva === 'bailarinos' && <AdminBailarinos />}
           {abaAtiva === 'premios' && <AdminPremios />}
           {abaAtiva === 'rifa' && <AdminRifa />}

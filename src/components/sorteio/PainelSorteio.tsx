@@ -6,8 +6,6 @@ import { BilhetesFixaveis } from './BilhetesFixaveis';
 import { HistoricoSorteios } from './HistoricoSorteios';
 import { useCampanha } from '../../hooks/useCampanha';
 
-// 10 Números Oficiais visíveis nas fatias da roleta da imagem de referência
-const NUMEROS_ROLETA = [1192, 23, 856, 78, 312, 66, 815, 1044, 12, 407];
 
 interface PainelSorteioProps {
   onConcluirSelecao: (numeros: number[]) => void;
@@ -39,7 +37,6 @@ export const PainelSorteio: React.FC<PainelSorteioProps> = ({ onConcluirSelecao 
 
       // Escolhe aleatoriamente uma das 10 fatias da roleta oficial
       const indiceFatiaSorteada = Math.floor(Math.random() * 10);
-      const numeroDaFatia = NUMEROS_ROLETA[indiceFatiaSorteada];
 
       // 6 a 8 voltas completas
       const voltasCompletas = 6 + Math.floor(Math.random() * 3);
@@ -64,31 +61,30 @@ export const PainelSorteio: React.FC<PainelSorteioProps> = ({ onConcluirSelecao 
         transition: { duration: 4, ease: [0.15, 0, 0.1, 1] },
       });
 
-      // O número oficial da fatia que parou no ponteiro
-      setUltimoNumero(numeroDaFatia);
-
       if (!hasSpunOnce) {
-        // Primeiro giro: inclui o número sorteado no ponteiro e completa se quantidade > 1
-        const piscinaRestante = disponiveis.filter((n) => n !== numeroDaFatia);
-        const aleatoriosExtras = piscinaRestante
-          .sort(() => 0.5 - Math.random())
-          .slice(0, Math.max(0, quantidade - 1));
-
-        const novosNumeros = [numeroDaFatia, ...aleatoriosExtras].slice(0, quantidade);
+        // Primeiro giro: sorteia da lista de cotas disponíveis
+        const embaralhadas = [...disponiveis].sort(() => 0.5 - Math.random());
+        const novosNumeros = embaralhadas.slice(0, quantidade);
+        setUltimoNumero(novosNumeros[0] || null);
         setNumerosSorteados(novosNumeros);
         setHasSpunOnce(true);
       } else {
-        // Giros subsequentes: sorteia apenas os que NÃO foram fixados pelo usuário
-        const piscina = disponiveis.filter((n) => !numerosSorteados.includes(n));
-        const novosAleatorios = piscina.sort(() => 0.5 - Math.random());
+        // Giros subsequentes: mantém as fixadas que continuem disponíveis
+        const fixadasValidas = numerosSorteados.filter(
+          (n, idx) => indicesFixados.includes(idx) && disponiveis.includes(n)
+        );
+        const piscina = disponiveis
+          .filter((n) => !fixadasValidas.includes(n))
+          .sort(() => 0.5 - Math.random());
         let ponteiroPiscina = 0;
 
         const atualizados = [...numerosSorteados];
         for (let i = 0; i < quantidade; i++) {
-          if (!indicesFixados.includes(i)) {
-            atualizados[i] = novosAleatorios[ponteiroPiscina++] || atualizados[i];
+          if (!indicesFixados.includes(i) || !disponiveis.includes(atualizados[i])) {
+            atualizados[i] = piscina[ponteiroPiscina++] || atualizados[i];
           }
         }
+        setUltimoNumero(atualizados[0] || null);
         setNumerosSorteados(atualizados);
       }
     } catch (err) {

@@ -39,10 +39,19 @@ export interface Bailarino {
   ativo: boolean;
 }
 
+export interface ComboPromocional {
+  id: string;
+  quantidade: number;
+  precoTotal: number;
+  badge?: string;
+  destaque?: boolean;
+  ativo: boolean;
+}
+
 export type StatusCota = 'disponivel' | 'selecionado' | 'pago' | 'pendente' | 'reservado';
 
 export interface CotaRifa {
-  numero: number; // 1 a 1200
+  numero: number;
   status: StatusCota;
   compradorNome?: string;
   compradorEmail?: string;

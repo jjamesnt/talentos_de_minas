@@ -1,7 +1,6 @@
 import React from 'react';
 import { Ticket, Heart, ArrowRight, ShieldCheck, Sparkles, Share2 } from 'lucide-react';
 import { useCampanha } from '../../hooks/useCampanha';
-import { TOTAL_COTAS } from '../../constants/campanha';
 
 interface SeletorRifaProps {
   onAbrirApoio: () => void;
@@ -9,8 +8,8 @@ interface SeletorRifaProps {
 }
 
 export const SeletorRifa: React.FC<SeletorRifaProps> = ({ onAbrirApoio, onAbrirCompartilhar }) => {
-  const { totalCotasVendidas, bailarinos, precoPorCota } = useCampanha();
-  const cotasRestantes = TOTAL_COTAS - totalCotasVendidas;
+  const { totalCotasVendidas, precoPorCota, totalCotas, bailarinos } = useCampanha();
+  const cotasRestantes = Math.max(0, totalCotas - totalCotasVendidas);
 
   return (
     <section id="secao-rifa" className="py-12 sm:py-20 border-b border-white/5 relative overflow-hidden">
@@ -22,7 +21,7 @@ export const SeletorRifa: React.FC<SeletorRifaProps> = ({ onAbrirApoio, onAbrirC
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/60 border border-[#00FF88]/40 text-[11px] sm:text-xs font-semibold text-[#00FF88] uppercase tracking-wider mb-4 shadow-lg">
             <Ticket className="w-3.5 h-3.5" />
-            <span>Campanha Oficial • 1.200 Cotas da Sorte</span>
+            <span>Campanha Oficial • {totalCotas.toLocaleString('pt-BR')} Cotas da Sorte</span>
           </div>
 
           {/* Título Principal */}

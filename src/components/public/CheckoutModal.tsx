@@ -34,7 +34,7 @@ export const CheckoutModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
   isOpen,
   onClose,
 }) => {
-  const { cotasSelecionadas, bailarinos, bailarinoSelecionadoId, concluirPedido, precoPorCota, carregarDadosReais } = useCampanha();
+  const { cotasSelecionadas, bailarinos, bailarinoSelecionadoId, concluirPedido, precoPorCota, carregarDadosReais, calcularValorCotas } = useCampanha();
   const { showToast } = useToast();
 
   const [nome, setNome] = useState('');
@@ -52,7 +52,7 @@ export const CheckoutModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
 
   const bailarinoId = bailarinoIdManual ?? bailarinoSelecionadoId ?? bailarinos[0]?.id ?? '';
 
-  const valorTotal = cotasSelecionadas.length * precoPorCota;
+  const { valorTotal, comboAplicado, economia } = calcularValorCotas(cotasSelecionadas.length);
 
   // Timer de 20 minutos para expiração do Pix
   useEffect(() => {
@@ -265,7 +265,17 @@ export const CheckoutModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
             </div>
             <div className="text-right">
               <span className="text-xs text-slate-400">Total a pagar</span>
+              {economia > 0 && (
+                <span className="block text-[11px] text-slate-500 line-through font-mono">
+                  R$ {(cotasSelecionadas.length * precoPorCota).toFixed(2).replace('.', ',')}
+                </span>
+              )}
               <p className="text-base font-bold text-white">R$ {valorTotal.toLocaleString('pt-BR')},00</p>
+              {economia > 0 && (
+                <span className="block text-[10px] text-[#00FF88] font-bold">
+                  Economia de R$ {economia},00 ({comboAplicado?.badge || 'Combo'})
+                </span>
+              )}
             </div>
           </div>
 
