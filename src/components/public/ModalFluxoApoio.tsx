@@ -62,7 +62,6 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
     precoPorCota,
     carregarDadosReais,
     totalCotas,
-    combosPromocionais,
     calcularValorCotas,
   } = useCampanha();
   const { showToast } = useToast();
@@ -710,16 +709,15 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
                 </div>
               </div>
 
-              {/* Seletor Rápido de Cotas com Combos Promocionais */}
+              {/* Seletor Rápido de Cotas (1, 3, 5, 10 cotas - R$ 30 por cota) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {combosPromocionais.filter(c => c.ativo).map((combo) => {
-                  const qtd = combo.quantidade;
+                {[1, 3, 5, 10].map((qtd) => {
                   const isSelected = quantidadeCotas === qtd;
-                  const economiaCombo = Math.max(0, (qtd * precoPorCota) - combo.precoTotal);
+                  const valorOpcao = qtd * precoPorCota;
 
                   return (
                     <button
-                      key={combo.id || qtd}
+                      key={qtd}
                       type="button"
                       onClick={() => {
                         setQuantidadeCotas(qtd);
@@ -727,26 +725,13 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
                         setNumerosSorteados([]);
                         setIndicesFixados([]);
                       }}
-                      className={`relative py-3 px-2 rounded-2xl text-xs font-bold text-center transition-all cursor-pointer border flex flex-col items-center justify-between min-h-[78px] ${
+                      className={`relative py-3 px-2 rounded-2xl text-xs font-bold text-center transition-all cursor-pointer border flex flex-col items-center justify-between min-h-[72px] ${
                         isSelected
                           ? 'bg-[#00FF88] text-black border-[#00FF88] shadow-[0_0_15px_rgba(0,255,136,0.5)] ring-1 ring-[#00FF88]'
-                          : combo.destaque
-                            ? 'bg-[#0F3D2A]/40 border-[#00FF88]/40 hover:border-[#00FF88] text-slate-200'
-                            : 'bg-black/40 border-white/10 hover:border-white/20 text-slate-300'
+                          : 'bg-black/40 border-white/10 hover:border-white/20 text-slate-300'
                       }`}
                     >
-                      {/* Badge do Combo se houver */}
-                      {combo.badge && (
-                        <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-tight whitespace-nowrap shadow-md ${
-                          isSelected
-                            ? 'bg-black text-[#00FF88] border border-black'
-                            : 'bg-[#D4AF37] text-black'
-                        }`}>
-                          {combo.badge}
-                        </span>
-                      )}
-
-                      <div className="w-full flex items-baseline justify-center gap-1 mt-1">
+                      <div className="w-full flex items-baseline justify-center gap-1 mt-0.5">
                         <span className="text-lg font-black">{qtd}</span>
                         <span className="text-[10px] uppercase font-bold opacity-80">{qtd === 1 ? 'Cota' : 'Cotas'}</span>
                       </div>
@@ -755,15 +740,8 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
                         <span className={`font-mono text-xs font-bold block ${
                           isSelected ? 'text-black' : 'text-[#D4AF37]'
                         }`}>
-                          R$ {combo.precoTotal},00
+                          R$ {valorOpcao},00
                         </span>
-                        {economiaCombo > 0 && (
-                          <span className={`text-[9px] block font-semibold leading-tight ${
-                            isSelected ? 'text-emerald-950 font-black' : 'text-[#00FF88]'
-                          }`}>
-                            Poupe R$ {economiaCombo}
-                          </span>
-                        )}
                       </div>
                     </button>
                   );
@@ -797,23 +775,15 @@ export const ModalFluxoApoio: React.FC<ModalFluxoApoioProps> = ({
                 </div>
               </div>
 
-              {/* Valor Total com Destaque de Economia */}
+              {/* Valor Total Oficial */}
               <div className="p-3.5 rounded-2xl bg-gradient-to-r from-[#D4AF37]/10 to-[#00FF88]/10 border border-[#D4AF37]/30 flex items-center justify-between">
                 <div>
                   <span className="text-xs uppercase tracking-wider text-slate-300 font-semibold block">Valor Total:</span>
-                  {economia > 0 && (
-                    <span className="text-[11px] text-[#00FF88] font-bold flex items-center gap-1 mt-0.5">
-                      <Sparkles className="w-3 h-3 text-[#D4AF37]" />
-                      Você economiza R$ {economia},00 no combo!
-                    </span>
-                  )}
+                  <span className="text-[11px] text-slate-400 mt-0.5 block">
+                    {quantidadeCotas} {quantidadeCotas === 1 ? 'cota' : 'cotas'} × R$ {precoPorCota},00
+                  </span>
                 </div>
                 <div className="text-right">
-                  {economia > 0 && (
-                    <span className="text-xs text-slate-400 line-through font-mono block">
-                      R$ {(quantidadeCotas * precoPorCota).toFixed(2).replace('.', ',')}
-                    </span>
-                  )}
                   <span className="font-mono text-xl font-black text-[#D4AF37]">
                     R$ {valorTotal.toFixed(2).replace('.', ',')}
                   </span>

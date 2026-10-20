@@ -6,9 +6,9 @@ export const TOTAL_COTAS = TOTAL_COTAS_PADRAO; // Mantido para compatibilidade r
 
 export const COMBOS_PADRAO: ComboPromocional[] = [
   { id: 'combo-1', quantidade: 1, precoTotal: 30, ativo: true },
-  { id: 'combo-3', quantidade: 3, precoTotal: 80, badge: 'Mais Escolhido', destaque: false, ativo: true },
-  { id: 'combo-5', quantidade: 5, precoTotal: 130, badge: 'Super Desconto', destaque: true, ativo: true },
-  { id: 'combo-10', quantidade: 10, precoTotal: 250, badge: 'Apoiador Master', destaque: false, ativo: true },
+  { id: 'combo-3', quantidade: 3, precoTotal: 90, destaque: false, ativo: true },
+  { id: 'combo-5', quantidade: 5, precoTotal: 150, destaque: false, ativo: true },
+  { id: 'combo-10', quantidade: 10, precoTotal: 300, destaque: false, ativo: true },
 ];
 
 export const PREMIOS_OFICIAIS: Premio[] = [
